@@ -1,0 +1,57 @@
+name: Build Minidisc IPA
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-ipa:
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+
+      - name: Resolve Swift Packages
+        run: |
+          xcodebuild -resolvePackageDependencies -project Minidisc.xcodeproj -scheme Minidisc
+
+      - name: Build Archive (Unsigned for Sideloading)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Minidisc.xcodeproj \
+            -scheme Minidisc \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Minidisc.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            archive 2>&1 | tee build.log || {
+              echo "::error::=== BUILD FAILED - COMPILATION ERRORS ==="
+              grep -E "(: error:|fatal error:)" build.log | sort -u || tail -n 50 build.log
+              exit 1
+            }
+
+      - name: Package IPA
+        run: |
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$RUNNER_TEMP/Minidisc.xcarchive/Products/Applications/Minidisc.app" "$RUNNER_TEMP/Payload/"
+          cd "$RUNNER_TEMP"
+          zip -qry "$GITHUB_WORKSPACE/Minidisc.ipa" Payload
+          ls -lh "$GITHUB_WORKSPACE/Minidisc.ipa"
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Minidisc-iOS-IPA
+          path: Minidisc.ipa
+          retention-days: 30
