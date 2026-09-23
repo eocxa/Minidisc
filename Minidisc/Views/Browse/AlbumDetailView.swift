@@ -73,8 +73,16 @@ struct AlbumDetailView: View {
     @State private var showDeleteAlert = false
     @State private var showThemeColorSheet = false
     @State private var recommendedAlbums: [AlbumID3] = []
+    @State private var enrichment: NowLocalEnrichment?
     @Query private var albumFavoriteMatches: [FavoriteRecord]
     @Query private var downloadedAlbumTracks: [DownloadedTrack]
+
+    private var resolvedAnimatedSquareURL: URL? {
+        NowLocalService.shared.resolveArtworkURL(
+            path: enrichment?.animatedSquareUrl,
+            activeServerBaseURL: container?.serverState.activeServer?.baseURL
+        )
+    }
 
     private var isAlbumFavorite: Bool { !albumFavoriteMatches.isEmpty }
     private var isOnline: Bool { container?.serverState.isOnline == true }
@@ -207,7 +215,8 @@ struct AlbumDetailView: View {
                 AlbumArtworkSection(
                     coverArtId: viewModel?.coverArtId ?? coverArtId ?? albumId,
                     coverImage: effectiveInitialImage,
-                    albumName: viewModel?.albumName ?? initialName
+                    albumName: viewModel?.albumName ?? initialName,
+                    animatedArtworkURL: resolvedAnimatedSquareURL
                 )
                 .padding(.top, MinidiscSpacing.xxl)
 
@@ -218,7 +227,9 @@ struct AlbumDetailView: View {
                     year: viewModel?.year,
                     genre: viewModel?.genre,
                     isLoading: viewModel == nil,
-                    isOffline: viewModel?.isOffline == true
+                    isOffline: viewModel?.isOffline == true,
+                    isLossless: enrichment?.isLossless ?? false,
+                    isAtmos: enrichment?.isAtmos ?? false
                 )
                 .padding(.top, MinidiscSpacing.xl)
 
@@ -442,6 +453,15 @@ struct AlbumDetailView: View {
 
             await loadAlbumRecommendations(for: recommendationRequest)
         }
+        .task(id: "\(viewModel?.albumName ?? initialName)_\(viewModel?.artistName ?? initialArtistName ?? "")") {
+            let album = viewModel?.albumName ?? initialName
+            let artist = viewModel?.artistName ?? initialArtistName
+            enrichment = await NowLocalService.shared.fetchEnrichment(
+                album: album,
+                artist: artist,
+                activeServerBaseURL: container?.serverState.activeServer?.baseURL
+            )
+        }
         .minidiscZoomTransition(sourceID: zoomSourceId, in: zoomNamespace)
     }
 
@@ -593,15 +613,27 @@ struct AlbumArtworkSection: View {
     let coverArtId: String
     let coverImage: PlatformImage?
     let albumName: String
+    var animatedArtworkURL: URL? = nil
 
     var body: some View {
-        CoverArtView(
-            id: coverArtId,
-            size: 800,
-            tier: .hero,
-            cornerRadius: MinidiscCornerRadius.large,
-            initialImage: coverImage
-        )
+        Group {
+            if let animatedArtworkURL {
+                MotionArtworkView(
+                    videoURL: animatedArtworkURL,
+                    fallbackId: coverArtId,
+                    fallbackImage: coverImage,
+                    cornerRadius: MinidiscCornerRadius.large
+                )
+            } else {
+                CoverArtView(
+                    id: coverArtId,
+                    size: 800,
+                    tier: .hero,
+                    cornerRadius: MinidiscCornerRadius.large,
+                    initialImage: coverImage
+                )
+            }
+        }
         .aspectRatio(1, contentMode: .fit)
         .frame(maxWidth: 340)
         .minidiscCoverStyle(cornerRadius: MinidiscCornerRadius.large)
@@ -624,6 +656,8 @@ struct AlbumMetadataSection: View {
     let genre: String?
     let isLoading: Bool
     let isOffline: Bool
+    var isLossless: Bool = false
+    var isAtmos: Bool = false
 
     var body: some View {
         VStack(spacing: MinidiscSpacing.xs) {
@@ -653,8 +687,13 @@ struct AlbumMetadataSection: View {
                 SkeletonBlock(width: 100, height: 14, cornerRadius: 4)
                     .padding(.top, MinidiscSpacing.xs)
             } else {
-                AlbumMetadataLine(genre: genre, year: year)
-                    .padding(.top, MinidiscSpacing.xs)
+                AlbumMetadataLine(
+                    genre: genre,
+                    year: year,
+                    isLossless: isLossless,
+                    isAtmos: isAtmos
+                )
+                .padding(.top, MinidiscSpacing.xs)
             }
         }
         .padding(.horizontal, MinidiscSpacing.xxl)
@@ -664,6 +703,8 @@ struct AlbumMetadataSection: View {
 private struct AlbumMetadataLine: View {
     let genre: String?
     let year: Int?
+    var isLossless: Bool = false
+    var isAtmos: Bool = false
 
     var body: some View {
         HStack(spacing: MinidiscSpacing.xs) {
@@ -677,9 +718,34 @@ private struct AlbumMetadataLine: View {
             if let year {
                 Text(String(year))
             }
+            if isLossless {
+                AudioQualityBadge(title: "Lossless")
+            }
+            if isAtmos {
+                AudioQualityBadge(title: "Dolby Atmos")
+            }
         }
         .font(.minidiscCaption)
         .foregroundStyle(.secondary)
+    }
+}
+
+public struct AudioQualityBadge: View {
+    let title: String
+
+    public init(title: String) {
+        self.title = title
+    }
+
+    public var body: some View {
+        Text(title)
+            .font(.system(size: 10, weight: .bold))
+            .textCase(.none)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Color.white.opacity(0.16))
+            .foregroundStyle(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
     }
 }
 

@@ -44,7 +44,15 @@ struct FullPlayerView: View {
     @State private var surface: PlayerSurface = .player
     @State private var lyricsViewModel: LyricsViewModel?
     @State private var trackSwipe = TrackSwipeInteraction()
+    @State private var currentTrackEnrichment: NowLocalEnrichment?
     @Namespace private var morphNS
+
+    private var resolvedAnimatedCoverURL: URL? {
+        NowLocalService.shared.resolveArtworkURL(
+            path: currentTrackEnrichment?.animatedSquareUrl,
+            activeServerBaseURL: container?.serverState.activeServer?.baseURL
+        )
+    }
 
     // MARK: - Player layout
 
@@ -91,10 +99,23 @@ struct FullPlayerView: View {
                         source: lyricsSource,
                         lyricsService: lyricsService,
                         playerService: playerService,
-                        playerState: playerState
+                        playerState: playerState,
+                        activeServerBaseURL: container?.serverState.activeServer?.baseURL
                     )
                     lyricsViewModel = newVM
                     await newVM.load()
+                }
+                .task(id: playerState.currentTrack?.id) {
+                    guard let track = playerState.currentTrack else {
+                        currentTrackEnrichment = nil
+                        return
+                    }
+                    currentTrackEnrichment = await NowLocalService.shared.fetchEnrichment(
+                        album: track.album,
+                        artist: track.artist,
+                        title: track.title,
+                        activeServerBaseURL: container?.serverState.activeServer?.baseURL
+                    )
                 }
                 .sheet(item: $playlistAddition.request) { request in
                     AddToPlaylistSheet(request: request)
@@ -186,7 +207,9 @@ struct FullPlayerView: View {
                         playerState: playerState,
                         playerService: container?.playerService,
                         contentColor: vm.contentColor,
-                        secondaryContentColor: vm.secondaryContentColor
+                        secondaryContentColor: vm.secondaryContentColor,
+                        isLossless: currentTrackEnrichment?.isLossless ?? false,
+                        isAtmos: currentTrackEnrichment?.isAtmos ?? false
                     )
                     .padding(.horizontal, Self.playerHorizontalPadding)
                     .padding(.top, MinidiscSpacing.m)
@@ -238,16 +261,28 @@ struct FullPlayerView: View {
     private func flowingCover(_ playerState: PlayerState, coverArtId: String, isSource: Bool) -> some View {
         GeometryReader { geo in
             let artworkSide = min(geo.size.width, geo.size.height)
-            CoverArtView(id: coverArtId, size: 1000,
-                         initialImage: initialArtwork?.id == coverArtId ? initialArtwork?.image : nil)
-                .clipShape(
-                    RoundedRectangle(
-                        cornerRadius: isSource ? MinidiscCornerRadius.large : MinidiscCornerRadius.standard,
-                        style: .continuous
+            Group {
+                if let animatedURL = resolvedAnimatedCoverURL, isSource {
+                    MotionArtworkView(
+                        videoURL: animatedURL,
+                        fallbackId: coverArtId,
+                        fallbackImage: initialArtwork?.id == coverArtId ? initialArtwork?.image : nil,
+                        cornerRadius: MinidiscCornerRadius.large,
+                        isPaused: playerState.playbackState != .playing
                     )
-                )
-                .matchedGeometryEffect(id: "playerArtwork", in: artworkNamespace ?? morphNS, isSource: isSource)
-                .frame(width: isSource ? artworkSide : nil, height: isSource ? artworkSide : nil)
+                } else {
+                    CoverArtView(id: coverArtId, size: 1000,
+                                 initialImage: initialArtwork?.id == coverArtId ? initialArtwork?.image : nil)
+                        .clipShape(
+                            RoundedRectangle(
+                                cornerRadius: isSource ? MinidiscCornerRadius.large : MinidiscCornerRadius.standard,
+                                style: .continuous
+                            )
+                        )
+                }
+            }
+            .matchedGeometryEffect(id: "playerArtwork", in: artworkNamespace ?? morphNS, isSource: isSource)
+            .frame(width: isSource ? artworkSide : nil, height: isSource ? artworkSide : nil)
                 .shadow(
                     color: isSource ? Color.black.opacity(0.28) : .clear,
                     radius: 18,
@@ -697,6 +732,8 @@ private struct ScrubberView: View {
     let playerService: (any PlayerServiceProtocol)?
     let contentColor: Color
     let secondaryContentColor: Color
+    var isLossless: Bool = false
+    var isAtmos: Bool = false
 
     @State private var isDragging = false
     @State private var isSeeking = false
@@ -739,7 +776,9 @@ private struct ScrubberView: View {
                 playerState: playerState,
                 effectiveDuration: effectiveDuration,
                 overridePosition: (isDragging || isSeeking) ? displayPosition : nil,
-                color: secondaryContentColor
+                color: secondaryContentColor,
+                isLossless: isLossless,
+                isAtmos: isAtmos
             )
         }
     }
@@ -751,6 +790,8 @@ private struct ScrubberTimeLabels: View {
     let effectiveDuration: TimeInterval
     let overridePosition: TimeInterval?
     let color: Color
+    var isLossless: Bool = false
+    var isAtmos: Bool = false
 
     var body: some View {
         let shown = overridePosition ?? playerState.position
@@ -759,6 +800,12 @@ private struct ScrubberTimeLabels: View {
                 .font(.minidiscCaption)
                 .foregroundStyle(color)
                 .monospacedDigit()
+            Spacer()
+            if isAtmos {
+                AudioQualityBadge(title: "Dolby Atmos")
+            } else if isLossless {
+                AudioQualityBadge(title: "Lossless")
+            }
             Spacer()
             Text(
                 verbatim: "-\(Duration.seconds(max(effectiveDuration - shown, 0)).formatted(.time(pattern: .minuteSecond)))"

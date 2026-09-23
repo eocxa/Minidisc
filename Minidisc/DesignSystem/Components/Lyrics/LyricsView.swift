@@ -11,6 +11,9 @@ struct LyricsView: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
+            case .loadedTTML(let ttml):
+                TTMLLyricsView(viewModel: viewModel, lyricsResponse: ttml)
+
             case .loaded(let structured):
                 loadedContent(structured)
 
