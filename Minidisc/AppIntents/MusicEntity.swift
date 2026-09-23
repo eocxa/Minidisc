@@ -50,9 +50,3 @@ struct MinidiscMusicQuery: EntityStringQuery {
     }
 }
 
-extension Mood: AppEnum {
-    static let typeDisplayRepresentation: TypeDisplayRepresentation = "Mood"
-    static let caseDisplayRepresentations: [Mood: DisplayRepresentation] = [
-        .night: "Night", .energetic: "Energetic", .workout: "Workout", .chill: "Chill", .focus: "Focus"
-    ]
-}

@@ -47,7 +47,7 @@ struct MiniPlayerAccessoryView: View {
             }
         }
         .offset(x: dragOffset)
-        .opacity(1.0 - min(abs(dragOffset) / 200, 0.4))
+        .opacity(Double(1.0 - min(abs(dragOffset) / 200.0, 0.4)))
         .contentShape(Rectangle())
         .onTapGesture(perform: expandPlayer)
         .gesture(!playerState.queue.isEmpty && !isLiveStream ? swipeSkipGesture : nil)

@@ -7,7 +7,7 @@ struct MinidiscShortcuts: AppShortcutsProvider {
             "Play music in \(.applicationName)"
         ], shortTitle: "Play Music", systemImageName: "play.fill")
         AppShortcut(intent: PlayMinidiscMoodIntent(), phrases: [
-            "Play \(\.$mood) mood in \(.applicationName)",
+            "Play \(\PlayMinidiscMoodIntent.$mood) mood in \(.applicationName)",
             "Play a mood in \(.applicationName)"
         ], shortTitle: "Play a Mood", systemImageName: "moon.stars")
         AppShortcut(intent: MinidiscSmartShuffleIntent(), phrases: [

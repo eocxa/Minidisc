@@ -1,12 +1,18 @@
 import Foundation
+import AppIntents
 
 /// AudioMuse CLAP queries remain in English; only the user-facing titles are localized.
-nonisolated enum Mood: String, CaseIterable, Sendable, Identifiable {
+nonisolated enum Mood: String, CaseIterable, Sendable, Identifiable, AppEnum {
     case night
     case energetic
     case workout
     case chill
     case focus
+
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "Mood"
+    static let caseDisplayRepresentations: [Mood: DisplayRepresentation] = [
+        .night: "Night", .energetic: "Energetic", .workout: "Workout", .chill: "Chill", .focus: "Focus"
+    ]
 
     var id: String { rawValue }
 

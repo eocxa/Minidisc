@@ -26,7 +26,9 @@ struct PlayMinidiscMoodIntent: AudioPlaybackIntent {
     static var supportedModes: IntentModes { .background }
     @Parameter(title: "Mood") var mood: Mood
     @Dependency private var runtime: MinidiscRuntime
-    static var parameterSummary: some ParameterSummary { Summary("Play \(\.$mood)") }
+    static var parameterSummary: some ParameterSummary {
+        Summary("Play \(\PlayMinidiscMoodIntent.$mood)")
+    }
 
     @MainActor
     func perform() async throws -> some IntentResult {
