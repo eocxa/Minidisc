@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 extension Mood {
     var gradientSpec: PlaylistGradientSpec {
         let shape: PlaylistGradientShape

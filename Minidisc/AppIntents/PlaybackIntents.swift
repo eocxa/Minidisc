@@ -27,7 +27,7 @@ struct PlayMinidiscMoodIntent: AudioPlaybackIntent {
     @Parameter(title: "Mood") var mood: Mood
     @Dependency private var runtime: MinidiscRuntime
     static var parameterSummary: some ParameterSummary {
-        Summary("Play \(\PlayMinidiscMoodIntent.$mood)")
+        Summary("Play \(\.$mood)")
     }
 
     @MainActor
