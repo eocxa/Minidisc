@@ -245,13 +245,19 @@ actor LocalMusicStore {
         let asset = AVURLAsset(url: url)
         guard (try? await asset.load(.isPlayable)) == true else { return previous }
         let metadata = (try? await asset.load(.commonMetadata)) ?? []
-        func value(_ key: AVMetadataKey) async -> String? {
-            guard let item = metadata.first(where: { $0.commonKey == key }) else { return nil }
-            return try? await item.load(.stringValue)
+        var rawTitle: String?
+        var artist: String?
+        var album: String?
+        for item in metadata {
+            if item.commonKey == .commonKeyTitle {
+                rawTitle = try? await item.load(.stringValue)
+            } else if item.commonKey == .commonKeyArtist {
+                artist = try? await item.load(.stringValue)
+            } else if item.commonKey == .commonKeyAlbumName {
+                album = try? await item.load(.stringValue)
+            }
         }
-        let title = await value(.commonKeyTitle) ?? url.deletingPathExtension().lastPathComponent
-        let artist = await value(.commonKeyArtist)
-        let album = await value(.commonKeyAlbumName)
+        let title = rawTitle ?? url.deletingPathExtension().lastPathComponent
         let duration = (try? await asset.load(.duration).seconds) ?? 0
         let allMetadata = (try? await asset.load(.metadata)) ?? []
         var trackNumber: Int?
