@@ -80,7 +80,11 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
         }
     }
 
-    class Coordinator: NSObject {
+    static func dismantleUIView(_ uiView: PlayerContainerUIView, coordinator: Coordinator) {
+        coordinator.cleanup()
+    }
+
+    final class Coordinator: NSObject {
         var currentURL: URL?
         private var player: AVQueuePlayer?
         private var looper: AVPlayerLooper?
@@ -105,9 +109,10 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
             )
         }
 
-        deinit {
+        func cleanup() {
             NotificationCenter.default.removeObserver(self)
             readyObserver?.invalidate()
+            readyObserver = nil
             player?.pause()
             player = nil
             looper = nil
