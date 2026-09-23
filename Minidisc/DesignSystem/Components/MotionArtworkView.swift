@@ -1,7 +1,7 @@
 import SwiftUI
 import AVFoundation
 
-public struct MotionArtworkView: View {
+struct MotionArtworkView: View {
     let videoURL: URL?
     let fallbackId: String
     let fallbackImage: PlatformImage?
@@ -10,7 +10,7 @@ public struct MotionArtworkView: View {
 
     @State private var isVideoReady = false
 
-    public init(
+    init(
         videoURL: URL?,
         fallbackId: String,
         fallbackImage: PlatformImage? = nil,
@@ -24,7 +24,7 @@ public struct MotionArtworkView: View {
         self.isPaused = isPaused
     }
 
-    public var body: some View {
+    var body: some View {
         ZStack {
             // Capa estática base de la portada (siempre presente para transición suave y mientras carga el video)
             CoverArtView(

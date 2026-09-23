@@ -730,14 +730,14 @@ private struct AlbumMetadataLine: View {
     }
 }
 
-public struct AudioQualityBadge: View {
+struct AudioQualityBadge: View {
     let title: String
 
-    public init(title: String) {
+    init(title: String) {
         self.title = title
     }
 
-    public var body: some View {
+    var body: some View {
         Text(title)
             .font(.system(size: 10, weight: .bold))
             .textCase(.none)

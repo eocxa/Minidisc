@@ -1,19 +1,19 @@
 import Foundation
 import OSLog
 
-public struct NowLocalEnrichment: Sendable, Codable {
-    public let found: Bool
-    public let trackId: String?
-    public let title: String?
-    public let artist: String?
-    public let album: String?
-    public let hasAnimatedArtwork: Bool?
-    public let animatedSquareUrl: String?
-    public let animatedTallUrl: String?
-    public let isAtmos: Bool?
-    public let isLossless: Bool?
-    public let lyricsUrl: String?
-    public let lyricsType: String?
+nonisolated struct NowLocalEnrichment: Sendable, Codable {
+    let found: Bool
+    let trackId: String?
+    let title: String?
+    let artist: String?
+    let album: String?
+    let hasAnimatedArtwork: Bool?
+    let animatedSquareUrl: String?
+    let animatedTallUrl: String?
+    let isAtmos: Bool?
+    let isLossless: Bool?
+    let lyricsUrl: String?
+    let lyricsType: String?
 
     enum CodingKeys: String, CodingKey {
         case found
@@ -31,36 +31,36 @@ public struct NowLocalEnrichment: Sendable, Codable {
     }
 }
 
-public struct NowLocalLyricWord: Sendable, Codable, Identifiable, Hashable {
-    public var id: String { "\(time)_\(text)" }
-    public let time: Double
-    public let endTime: Double?
-    public let text: String
+nonisolated struct NowLocalLyricWord: Sendable, Codable, Identifiable, Hashable {
+    var id: String { "\(time)_\(text)" }
+    let time: Double
+    let endTime: Double?
+    let text: String
 
-    public init(time: Double, endTime: Double?, text: String) {
+    init(time: Double, endTime: Double?, text: String) {
         self.time = time
         self.endTime = endTime
         self.text = text
     }
 }
 
-public struct NowLocalLyricSubPart: Sendable, Codable, Hashable {
-    public let text: String?
-    public let words: [NowLocalLyricWord]?
-    public let time: Double?
-    public let endTime: Double?
+nonisolated struct NowLocalLyricSubPart: Sendable, Codable, Hashable {
+    let text: String?
+    let words: [NowLocalLyricWord]?
+    let time: Double?
+    let endTime: Double?
 }
 
-public struct NowLocalLyricLine: Sendable, Codable, Identifiable, Hashable {
-    public var id: String { "\(time)_\(text)" }
-    public let time: Double
-    public let endTime: Double?
-    public let text: String
-    public let words: [NowLocalLyricWord]?
-    public let agent: String? // "v1" or "v2"
-    public let hasAdlib: Bool?
-    public let main: NowLocalLyricSubPart?
-    public let adlib: NowLocalLyricSubPart?
+nonisolated struct NowLocalLyricLine: Sendable, Codable, Identifiable, Hashable {
+    var id: String { "\(time)_\(text)" }
+    let time: Double
+    let endTime: Double?
+    let text: String
+    let words: [NowLocalLyricWord]?
+    let agent: String? // "v1" or "v2"
+    let hasAdlib: Bool?
+    let main: NowLocalLyricSubPart?
+    let adlib: NowLocalLyricSubPart?
 
     enum CodingKeys: String, CodingKey {
         case time
@@ -74,11 +74,11 @@ public struct NowLocalLyricLine: Sendable, Codable, Identifiable, Hashable {
     }
 }
 
-public struct NowLocalLyricsResponse: Sendable, Codable, Equatable {
-    public let lyrics: [NowLocalLyricLine]
-    public let lyricsType: String?
-    public let hasWordSync: Bool?
-    public let composer: String?
+nonisolated struct NowLocalLyricsResponse: Sendable, Codable, Equatable {
+    let lyrics: [NowLocalLyricLine]
+    let lyricsType: String?
+    let hasWordSync: Bool?
+    let composer: String?
 
     enum CodingKeys: String, CodingKey {
         case lyrics
@@ -88,13 +88,13 @@ public struct NowLocalLyricsResponse: Sendable, Codable, Equatable {
     }
 }
 
-public actor NowLocalService {
-    public static let shared = NowLocalService()
+actor NowLocalService {
+    static let shared = NowLocalService()
     private var cache: [String: NowLocalEnrichment] = [:]
     private var lyricsCache: [String: NowLocalLyricsResponse] = [:]
     private let logger = Logger(subsystem: "app.minidisc.nowlocal", category: "Enrichment")
 
-    public nonisolated func resolveServerBaseURL(activeServerBaseURL: String?) -> URL? {
+    nonisolated func resolveServerBaseURL(activeServerBaseURL: String?) -> URL? {
         if let custom = UserDefaults.standard.string(forKey: "minidisc_nowlocal_url"),
            !custom.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
            let customURL = URL(string: custom) {
@@ -107,7 +107,7 @@ public actor NowLocalService {
         return URL(string: "\(scheme)://\(host):7430")
     }
 
-    public nonisolated func resolveArtworkURL(path: String?, activeServerBaseURL: String?) -> URL? {
+    nonisolated func resolveArtworkURL(path: String?, activeServerBaseURL: String?) -> URL? {
         guard let path = path, !path.isEmpty else { return nil }
         if path.hasPrefix("http://") || path.hasPrefix("https://") {
             return URL(string: path)
@@ -116,7 +116,7 @@ public actor NowLocalService {
         return URL(string: path, relativeTo: base)?.absoluteURL
     }
 
-    public func fetchEnrichment(album: String?, artist: String?, title: String? = nil, activeServerBaseURL: String?) async -> NowLocalEnrichment? {
+    func fetchEnrichment(album: String?, artist: String?, title: String? = nil, activeServerBaseURL: String?) async -> NowLocalEnrichment? {
         guard let base = resolveServerBaseURL(activeServerBaseURL: activeServerBaseURL) else { return nil }
 
         let cacheKey = "\(album ?? "")_\(artist ?? "")_\(title ?? "")"
@@ -150,7 +150,7 @@ public actor NowLocalService {
         return nil
     }
 
-    public func fetchLyrics(pathOrTrackId: String, activeServerBaseURL: String?) async -> NowLocalLyricsResponse? {
+    func fetchLyrics(pathOrTrackId: String, activeServerBaseURL: String?) async -> NowLocalLyricsResponse? {
         guard let base = resolveServerBaseURL(activeServerBaseURL: activeServerBaseURL) else { return nil }
 
         if let cached = lyricsCache[pathOrTrackId] {

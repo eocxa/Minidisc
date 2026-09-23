@@ -111,7 +111,7 @@ struct FullPlayerView: View {
                         return
                     }
                     currentTrackEnrichment = await NowLocalService.shared.fetchEnrichment(
-                        album: track.album,
+                        album: track.albumName,
                         artist: track.artist,
                         title: track.title,
                         activeServerBaseURL: container?.serverState.activeServer?.baseURL

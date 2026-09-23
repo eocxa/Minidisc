@@ -2,15 +2,15 @@ import SwiftUI
 
 // MARK: - Dot Physics for Instrumental Pauses (Replicating movil.html)
 
-public struct DotPhysicsResult {
-    public let rowScale: CGFloat
-    public let rowOpacity: Double
-    public let a1: Double
-    public let a2: Double
-    public let a3: Double
+struct DotPhysicsResult {
+    let rowScale: CGFloat
+    let rowOpacity: Double
+    let a1: Double
+    let a2: Double
+    let a3: Double
 }
 
-public func computeDotPhysics(currentTimeSec: Double, startTime: Double, nextTime: Double) -> DotPhysicsResult {
+func computeDotPhysics(currentTimeSec: Double, startTime: Double, nextTime: Double) -> DotPhysicsResult {
     let dur = max(0.8, nextTime - startTime)
     let elapsed = currentTimeSec - startTime
     let ratio = max(0.0, min(1.0, elapsed / dur))
@@ -86,13 +86,13 @@ public func computeDotPhysics(currentTimeSec: Double, startTime: Double, nextTim
 
 // MARK: - Three Dots View (Instrumental Marker)
 
-public struct ThreeDotsView: View {
+struct ThreeDotsView: View {
     let currentTime: Double
     let startTime: Double
     let nextTime: Double
     let isAgentV2: Bool
 
-    public var body: some View {
+    var body: some View {
         let physics = computeDotPhysics(
             currentTimeSec: currentTime,
             startTime: startTime,
@@ -127,11 +127,11 @@ public struct ThreeDotsView: View {
 
 // MARK: - Wrapping Flow Layout for Karaoke Words
 
-public struct LyricsFlowLayout: Layout {
-    public var horizontalAlignment: HorizontalAlignment = .leading
-    public var verticalSpacing: CGFloat = 4
+struct LyricsFlowLayout: Layout {
+    var horizontalAlignment: HorizontalAlignment = .leading
+    var verticalSpacing: CGFloat = 4
 
-    public init(horizontalAlignment: HorizontalAlignment = .leading, verticalSpacing: CGFloat = 4) {
+    init(horizontalAlignment: HorizontalAlignment = .leading, verticalSpacing: CGFloat = 4) {
         self.horizontalAlignment = horizontalAlignment
         self.verticalSpacing = verticalSpacing
     }
@@ -165,14 +165,14 @@ public struct LyricsFlowLayout: Layout {
         return rows
     }
 
-    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let rows = computeRows(proposal: proposal, subviews: subviews)
         let totalHeight = rows.reduce(CGFloat(0)) { $0 + $1.height } + CGFloat(max(0, rows.count - 1)) * verticalSpacing
         let maxWidth = rows.reduce(CGFloat(0)) { max($0, $1.width) }
         return CGSize(width: proposal.width ?? maxWidth, height: totalHeight)
     }
 
-    public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let rows = computeRows(proposal: ProposedViewSize(width: bounds.width, height: bounds.height), subviews: subviews)
         var y = bounds.minY
 
@@ -193,13 +193,13 @@ public struct LyricsFlowLayout: Layout {
 
 // MARK: - Word Span View (Karaoke Lighting & Elevation)
 
-public struct TTMLWordSpanView: View {
+struct TTMLWordSpanView: View {
     let word: NowLocalLyricWord
     let currentTime: Double
     let isLineActive: Bool
     var font: Font = .system(size: 28, weight: .bold, design: .rounded)
 
-    public var body: some View {
+    var body: some View {
         let isSung = currentTime >= (word.endTime ?? (word.time + 0.35))
         let isSinging = currentTime >= word.time && !isSung
         let duration = max(0.06, (word.endTime ?? (word.time + 0.35)) - word.time)
@@ -232,7 +232,7 @@ public struct TTMLWordSpanView: View {
 
 // MARK: - TTMLLineContentView (Main vocals & optional adlibs)
 
-public struct TTMLLineContentView: View {
+struct TTMLLineContentView: View {
     let line: NowLocalLyricLine
     let currentTime: Double
     let isLineActive: Bool
@@ -302,7 +302,7 @@ public struct TTMLLineContentView: View {
 
 // MARK: - Single Line Container (Spatial layout v1/v2, physics, blur, scale)
 
-public struct TTMLLyricsLineView: View {
+struct TTMLLyricsLineView: View {
     let line: NowLocalLyricLine
     let index: Int
     let currentIndex: Int?
@@ -357,7 +357,7 @@ public struct TTMLLyricsLineView: View {
         return isLineActive ? 1.03 : (distance > 2 ? 0.96 : 1.0)
     }
 
-    public var body: some View {
+    var body: some View {
         Group {
             if isDotMarker {
                 let nextT = nextLineTime ?? (line.time + 8.0)
@@ -393,7 +393,7 @@ public struct TTMLLyricsLineView: View {
 
 // MARK: - Main TTMLLyricsView
 
-public struct TTMLLyricsView: View {
+struct TTMLLyricsView: View {
     @Bindable var viewModel: LyricsViewModel
     let lyricsResponse: NowLocalLyricsResponse
 
@@ -405,7 +405,7 @@ public struct TTMLLyricsView: View {
         lyricsResponse.hasWordSync ?? true
     }
 
-    public var body: some View {
+    var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 36) {

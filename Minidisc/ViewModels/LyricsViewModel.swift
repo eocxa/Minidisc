@@ -65,7 +65,7 @@ final class LyricsViewModel {
 
         // 1. Try TTML / rich lyrics from NowLocal backend first
         if let enrichment = await NowLocalService.shared.fetchEnrichment(
-            album: track.album,
+            album: track.albumName,
             artist: track.artist,
             title: track.title,
             activeServerBaseURL: activeServerBaseURL
