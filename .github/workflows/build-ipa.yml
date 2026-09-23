@@ -46,8 +46,10 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             archive 2>&1 | tee build.log || {
-              echo "::error::=== BUILD FAILED - COMPILATION ERRORS ==="
-              grep -E "(: error:|fatal error:)" build.log | sort -u || tail -n 50 build.log
+              echo "::error::=== BUILD FAILED ==="
+              grep -E "(: error:|fatal error:)" build.log | while IFS= read -r line; do
+                echo "::error::$line"
+              done
               exit 1
             }
 
