@@ -131,7 +131,6 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
 
             let asset = AVURLAsset(url: url)
             let item = AVPlayerItem(asset: asset)
-            item.audioTimePitchAlgorithm = .lowQualityZeroLatency
 
             let qPlayer = AVQueuePlayer(playerItem: item)
             qPlayer.isMuted = true
@@ -143,13 +142,8 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
             view.playerLayer.player = qPlayer
             view.playerLayer.videoGravity = .resizeAspectFill
 
-            readyObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] observedItem, _ in
-                if observedItem.status == .readyToPlay {
-                    for track in observedItem.tracks {
-                        if track.assetTrack?.mediaType == .audio {
-                            track.isEnabled = false
-                        }
-                    }
+            readyObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
+                if item.status == .readyToPlay {
                     DispatchQueue.main.async {
                         self?.onReady()
                     }
