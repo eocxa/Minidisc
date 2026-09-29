@@ -246,8 +246,8 @@ struct FullPlayerView: View {
                 flowGap(isCompact ? MinidiscSpacing.xs : 40)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .animation(.spring(response: 0.45, dampingRatio: 0.82), value: showLyrics)
-            .animation(.spring(response: 0.45, dampingRatio: 0.82), value: surface)
+            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: showLyrics)
+            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: surface)
 
             BottomToolbar(
                 showLyrics: $showLyrics,
@@ -320,7 +320,7 @@ struct FullPlayerView: View {
                     .matchedGeometryEffect(id: "playerArtwork", in: artworkNamespace ?? morphNS, isSource: true)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        withAnimation(.spring(response: 0.45, dampingRatio: 0.82)) {
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
                             showLyrics = false
                         }
                     }
@@ -368,7 +368,7 @@ struct FullPlayerView: View {
                     .matchedGeometryEffect(id: "playerArtwork", in: artworkNamespace ?? morphNS, isSource: true)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        withAnimation(.spring(response: 0.45, dampingRatio: 0.82)) {
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
                             surface = .player
                         }
                     }
