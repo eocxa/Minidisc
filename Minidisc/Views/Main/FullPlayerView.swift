@@ -48,7 +48,8 @@ struct FullPlayerView: View {
     @Namespace private var morphNS
 
     private var resolvedAnimatedCoverURL: URL? {
-        NowLocalService.shared.resolveArtworkURL(
+        guard !UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_disabled") else { return nil }
+        return NowLocalService.shared.resolveArtworkURL(
             path: currentTrackEnrichment?.animatedSquareUrl,
             activeServerBaseURL: container?.serverState.activeServer?.baseURL
         )
@@ -110,12 +111,37 @@ struct FullPlayerView: View {
                         currentTrackEnrichment = nil
                         return
                     }
-                    currentTrackEnrichment = await NowLocalService.shared.fetchEnrichment(
+                    var enrichment = await NowLocalService.shared.fetchEnrichment(
                         album: track.albumName,
                         artist: track.artist,
                         title: track.title,
                         activeServerBaseURL: container?.serverState.activeServer?.baseURL
                     )
+                    if enrichment?.animatedSquareUrl == nil, let album = track.albumName, !album.isEmpty {
+                        let albumEnrichment = await NowLocalService.shared.fetchEnrichment(
+                            album: album,
+                            artist: track.artist,
+                            title: nil,
+                            activeServerBaseURL: container?.serverState.activeServer?.baseURL
+                        )
+                        if let albumSquare = albumEnrichment?.animatedSquareUrl {
+                            enrichment = NowLocalEnrichment(
+                                found: true,
+                                trackId: enrichment?.trackId ?? albumEnrichment?.trackId,
+                                title: enrichment?.title,
+                                artist: enrichment?.artist ?? track.artist,
+                                album: enrichment?.album ?? album,
+                                hasAnimatedArtwork: true,
+                                animatedSquareUrl: albumSquare,
+                                animatedTallUrl: albumEnrichment?.animatedTallUrl ?? enrichment?.animatedTallUrl,
+                                isAtmos: enrichment?.isAtmos ?? albumEnrichment?.isAtmos,
+                                isLossless: enrichment?.isLossless ?? albumEnrichment?.isLossless,
+                                lyricsUrl: enrichment?.lyricsUrl,
+                                lyricsType: enrichment?.lyricsType
+                            )
+                        }
+                    }
+                    currentTrackEnrichment = enrichment
                 }
                 .sheet(item: $playlistAddition.request) { request in
                     AddToPlaylistSheet(request: request)

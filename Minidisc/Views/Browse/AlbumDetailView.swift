@@ -78,7 +78,8 @@ struct AlbumDetailView: View {
     @Query private var downloadedAlbumTracks: [DownloadedTrack]
 
     private var resolvedAnimatedSquareURL: URL? {
-        NowLocalService.shared.resolveArtworkURL(
+        guard !UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_disabled") else { return nil }
+        return NowLocalService.shared.resolveArtworkURL(
             path: enrichment?.animatedSquareUrl,
             activeServerBaseURL: container?.serverState.activeServer?.baseURL
         )
@@ -624,6 +625,7 @@ struct AlbumArtworkSection: View {
                     fallbackImage: coverImage,
                     cornerRadius: MinidiscCornerRadius.large
                 )
+                .id(animatedArtworkURL)
             } else {
                 CoverArtView(
                     id: coverArtId,

@@ -43,12 +43,16 @@ struct MotionArtworkView: View {
                         isVideoReady = true
                     }
                 })
+                .id(videoURL)
                 .aspectRatio(1, contentMode: .fill)
                 .opacity(isVideoReady ? 1.0 : 0.0)
             }
         }
         .aspectRatio(1, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .onChange(of: videoURL) { _, _ in
+            isVideoReady = false
+        }
     }
 }
 
@@ -127,13 +131,7 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
 
             let asset = AVURLAsset(url: url)
             let item = AVPlayerItem(asset: asset)
-
-            // Deshabilitar cualquier pista de audio para no interferir con la música
-            for track in item.tracks {
-                if track.assetTrack?.mediaType == .audio {
-                    track.isEnabled = false
-                }
-            }
+            item.audioTimePitchAlgorithm = .lowQualityZeroLatency
 
             let qPlayer = AVQueuePlayer(playerItem: item)
             qPlayer.isMuted = true
@@ -145,8 +143,13 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
             view.playerLayer.player = qPlayer
             view.playerLayer.videoGravity = .resizeAspectFill
 
-            readyObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
-                if item.status == .readyToPlay {
+            readyObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] observedItem, _ in
+                if observedItem.status == .readyToPlay {
+                    for track in observedItem.tracks {
+                        if track.assetTrack?.mediaType == .audio {
+                            track.isEnabled = false
+                        }
+                    }
                     DispatchQueue.main.async {
                         self?.onReady()
                     }

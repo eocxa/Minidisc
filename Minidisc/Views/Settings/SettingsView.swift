@@ -824,6 +824,12 @@ private struct IntegrationsSettingsView: View {
                         .foregroundStyle(.primary)
                 }
                 NavigationLink {
+                    NowLocalSettingsView()
+                } label: {
+                    Text("Animated Artwork & NowLocal")
+                        .foregroundStyle(.primary)
+                }
+                NavigationLink {
                     ExternalProvidersSettingsView()
                 } label: {
                     Text("Open Releases In")

@@ -200,33 +200,29 @@ struct TTMLWordSpanView: View {
     var font: Font = .system(size: 28, weight: .bold, design: .rounded)
 
     var body: some View {
-        let isSung = currentTime >= (word.endTime ?? (word.time + 0.35))
-        let isSinging = currentTime >= word.time && !isSung
-        let duration = max(0.06, (word.endTime ?? (word.time + 0.35)) - word.time)
-        let progress = isSung ? 1.0 : (isSinging ? max(0.0, min(1.0, (currentTime - word.time) / duration)) : 0.0)
+        let start = word.time
+        let end = word.endTime ?? (word.time + 0.35)
 
-        ZStack(alignment: .leading) {
-            // Base un-sung text
-            Text(word.text)
-                .font(font)
-                .foregroundStyle(Color.white.opacity(isLineActive ? 0.38 : 0.25))
-
-            // Lit active karaoke text with wipe mask
-            if isLineActive && (isSinging || isSung) {
-                Text(word.text)
-                    .font(font)
-                    .foregroundStyle(Color.white)
-                    .shadow(color: .white.opacity(isSinging ? 0.35 : 0.0), radius: isSinging ? 5 : 0)
-                    .mask(
-                        GeometryReader { geo in
-                            Rectangle()
-                                .frame(width: isSung ? geo.size.width : geo.size.width * CGFloat(progress))
-                        }
-                    )
-            }
-        }
-        .offset(y: (isLineActive && isSinging) ? -1.0 : 0.0)
-        .animation(.easeOut(duration: 0.15), value: isSinging)
+        Text(word.text)
+            .font(font)
+            .karaoke(
+                time: currentTime,
+                start: start,
+                end: end,
+                configuration: KaraokeConfiguration(
+                    dimColor: Color.white.opacity(isLineActive ? 0.38 : 0.22),
+                    litColor: .white,
+                    glowColor: .white,
+                    glowAttack: 0.25,
+                    glowRelease: 0.30,
+                    glowStrength: isLineActive ? 1.0 : 0.0,
+                    glowRadius: 4,
+                    bounceHeight: isLineActive ? 1.4 : 0.0,
+                    bounceScale: 0.012,
+                    bounceRise: 0.25,
+                    bounceHold: 0.4
+                )
+            )
     }
 }
 
@@ -269,9 +265,22 @@ struct TTMLLineContentView: View {
                     }
                 }
             } else {
+                let start = line.time
+                let end = line.endTime ?? (line.time + 3.5)
                 Text(line.main?.text ?? line.text)
                     .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundStyle(isLineActive ? Color.white : Color.white.opacity(0.4))
+                    .karaoke(
+                        time: currentTime,
+                        start: start,
+                        end: end,
+                        configuration: KaraokeConfiguration(
+                            dimColor: Color.white.opacity(isLineActive ? 0.38 : 0.22),
+                            litColor: .white,
+                            glowColor: .white,
+                            glowStrength: isLineActive ? 0.8 : 0.0,
+                            bounceHeight: isLineActive ? 1.0 : 0.0
+                        )
+                    )
                     .multilineTextAlignment(isV2 ? .trailing : .leading)
             }
 
@@ -290,9 +299,22 @@ struct TTMLLineContentView: View {
                     }
                     .opacity(isLineActive ? 0.85 : 0.35)
                 } else if let adlibText = adlib.text, !adlibText.isEmpty {
+                    let start = adlib.time ?? line.time
+                    let end = adlib.endTime ?? (start + 3.0)
                     Text(adlibText)
                         .font(.system(size: 21, weight: .bold, design: .rounded))
-                        .foregroundStyle(isLineActive ? Color.white.opacity(0.85) : Color.white.opacity(0.35))
+                        .karaoke(
+                            time: currentTime,
+                            start: start,
+                            end: end,
+                            configuration: KaraokeConfiguration(
+                                dimColor: Color.white.opacity(isLineActive ? 0.35 : 0.18),
+                                litColor: .white.opacity(0.85),
+                                glowColor: .white,
+                                glowStrength: isLineActive ? 0.6 : 0.0,
+                                bounceHeight: isLineActive ? 0.8 : 0.0
+                            )
+                        )
                         .multilineTextAlignment(isV2 ? .trailing : .leading)
                 }
             }
@@ -406,74 +428,78 @@ struct TTMLLyricsView: View {
     }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 36) {
-                    ForEach(Array(lyricsResponse.lyrics.enumerated()), id: \.offset) { index, line in
-                        let nextLineTime = (index + 1 < lyricsResponse.lyrics.count) ? lyricsResponse.lyrics[index + 1].time : nil
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !viewModel.isPlaying)) { timeline in
+            let currentTime = viewModel.interpolatedPosition(at: timeline.date)
 
-                        TTMLLyricsLineView(
-                            line: line,
-                            index: index,
-                            currentIndex: viewModel.currentLineIndex,
-                            currentTime: viewModel.currentPosition,
-                            nextLineTime: nextLineTime,
-                            hasMultiArtist: hasMultiArtist,
-                            hasWordSync: hasWordSync,
-                            onSeek: {
-                                viewModel.userTapped(seconds: line.time)
-                            }
-                        )
-                        .id(index)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 36) {
+                        ForEach(Array(lyricsResponse.lyrics.enumerated()), id: \.offset) { index, line in
+                            let nextLineTime = (index + 1 < lyricsResponse.lyrics.count) ? lyricsResponse.lyrics[index + 1].time : nil
+
+                            TTMLLyricsLineView(
+                                line: line,
+                                index: index,
+                                currentIndex: viewModel.currentLineIndex,
+                                currentTime: currentTime,
+                                nextLineTime: nextLineTime,
+                                hasMultiArtist: hasMultiArtist,
+                                hasWordSync: hasWordSync,
+                                onSeek: {
+                                    viewModel.userTapped(seconds: line.time)
+                                }
+                            )
+                            .id(index)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 220)
+                }
+                .scrollIndicators(.hidden)
+                .onChange(of: viewModel.currentLineIndex) { _, newIndex in
+                    guard viewModel.autoScrollEnabled,
+                          !viewModel.isUserScrolling,
+                          let newIndex else { return }
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        proxy.scrollTo(newIndex, anchor: .center)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 220)
-            }
-            .scrollIndicators(.hidden)
-            .onChange(of: viewModel.currentLineIndex) { _, newIndex in
-                guard viewModel.autoScrollEnabled,
-                      !viewModel.isUserScrolling,
-                      let newIndex else { return }
-                withAnimation(.easeInOut(duration: 0.35)) {
-                    proxy.scrollTo(newIndex, anchor: .center)
-                }
-            }
-            .onScrollPhaseChange { _, newPhase in
-                switch newPhase {
-                case .interacting:
-                    viewModel.userStartedScrolling()
-                case .decelerating, .idle:
-                    guard viewModel.isUserScrolling else { return }
-                    viewModel.userStoppedScrolling()
-                default:
-                    break
-                }
-            }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                HStack {
-                    if let composer = lyricsResponse.composer, !composer.isEmpty {
-                        Text(composer)
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.6))
-                            .lineLimit(1)
+                .onScrollPhaseChange { _, newPhase in
+                    switch newPhase {
+                    case .interacting:
+                        viewModel.userStartedScrolling()
+                    case .decelerating, .idle:
+                        guard viewModel.isUserScrolling else { return }
+                        viewModel.userStoppedScrolling()
+                    default:
+                        break
                     }
-
-                    Spacer()
-
-                    Button {
-                        viewModel.autoScrollEnabled.toggle()
-                    } label: {
-                        Image(systemName: viewModel.autoScrollEnabled
-                            ? "arrow.up.arrow.down.circle.fill"
-                            : "arrow.up.arrow.down.circle")
-                            .font(.title3)
-                            .foregroundStyle(.white.opacity(0.8))
-                    }
-                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 24)
-                .padding(.vertical, 10)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    HStack {
+                        if let composer = lyricsResponse.composer, !composer.isEmpty {
+                            Text(composer)
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.white.opacity(0.6))
+                                .lineLimit(1)
+                        }
+
+                        Spacer()
+
+                        Button {
+                            viewModel.autoScrollEnabled.toggle()
+                        } label: {
+                            Image(systemName: viewModel.autoScrollEnabled
+                                ? "arrow.up.arrow.down.circle.fill"
+                                : "arrow.up.arrow.down.circle")
+                                .font(.title3)
+                                .foregroundStyle(.white.opacity(0.8))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 10)
+                }
             }
         }
     }

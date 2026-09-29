@@ -19,7 +19,25 @@ final class LyricsViewModel {
     var autoScrollEnabled: Bool = true
     private(set) var isUserScrolling: Bool = false
 
-    var currentPosition: Double { playerState.position }
+    private var lastPositionUpdateTime: Date = Date()
+    private var lastRecordedPosition: Double = 0
+
+    var currentPosition: Double {
+        interpolatedPosition()
+    }
+
+    func interpolatedPosition(at date: Date = Date()) -> Double {
+        guard isPlaying else { return playerState.position }
+        if abs(playerState.position - lastRecordedPosition) > 0.05 {
+            lastRecordedPosition = playerState.position
+            lastPositionUpdateTime = Date()
+        }
+        let delta = date.timeIntervalSince(lastPositionUpdateTime)
+        if delta < 0 || delta > 3.0 {
+            return playerState.position
+        }
+        return playerState.position + delta
+    }
 
     private var lyricsList: LyricsList?
     private var trackingTask: Task<Void, Never>?
@@ -142,6 +160,8 @@ final class LyricsViewModel {
     // MARK: - Seek
 
     func userTapped(seconds: Double) {
+        lastRecordedPosition = seconds
+        lastPositionUpdateTime = Date()
         Task { [weak self] in
             await self?.playerService.seek(to: seconds)
         }
@@ -223,6 +243,8 @@ final class LyricsViewModel {
 
     private func startTimer() {
         guard trackingTask == nil else { return }
+        lastRecordedPosition = playerState.position
+        lastPositionUpdateTime = Date()
         trackingTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 do {
@@ -231,7 +253,7 @@ final class LyricsViewModel {
                     return
                 }
                 guard let self else { return }
-                self.update(elapsedMs: Int(self.playerState.position * 1000))
+                self.update(elapsedMs: Int(self.interpolatedPosition() * 1000))
             }
         }
     }

@@ -116,14 +116,31 @@ actor NowLocalService {
         return URL(string: path, relativeTo: base)?.absoluteURL
     }
 
-    func fetchEnrichment(album: String?, artist: String?, title: String? = nil, activeServerBaseURL: String?) async -> NowLocalEnrichment? {
-        guard let base = resolveServerBaseURL(activeServerBaseURL: activeServerBaseURL) else { return nil }
-
-        let cacheKey = "\(album ?? "")_\(artist ?? "")_\(title ?? "")"
-        if let cached = cache[cacheKey] {
-            return cached
+    private func cleanMetadata(_ string: String) -> String {
+        var result = string
+        let patterns = [
+            "\\s*\\(.*?remaster.*?\\)",
+            "\\s*\\[.*?remaster.*?\\]",
+            "\\s*\\(.*?deluxe.*?\\)",
+            "\\s*\\[.*?deluxe.*?\\]",
+            "\\s*\\(.*?bonus.*?\\)",
+            "\\s*\\[.*?bonus.*?\\]",
+            "\\s*\\(.*?version.*?\\)",
+            "\\s*\\[.*?version.*?\\]",
+            "\\s*\\(.*?edition.*?\\)",
+            "\\s*\\[.*?edition.*?\\]",
+            "\\s*\\(.*?explicit.*?\\)",
+            "\\s*\\[.*?explicit.*?\\]"
+        ]
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                result = regex.stringByReplacingMatches(in: result, range: NSRange(result.startIndex..., in: result), withTemplate: "")
+            }
         }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
+    private func performEnrichmentRequest(base: URL, album: String?, artist: String?, title: String?, cacheKey: String) async -> NowLocalEnrichment? {
         var components = URLComponents(url: base.appendingPathComponent("api/enrichment"), resolvingAgainstBaseURL: false)
         var queryItems: [URLQueryItem] = []
         if let album, !album.isEmpty { queryItems.append(URLQueryItem(name: "album", value: album)) }
@@ -147,6 +164,39 @@ actor NowLocalService {
         } catch {
             logger.debug("Enrichment lookup failed for \(cacheKey): \(error.localizedDescription)")
         }
+        return nil
+    }
+
+    func fetchEnrichment(album: String?, artist: String?, title: String? = nil, activeServerBaseURL: String?) async -> NowLocalEnrichment? {
+        guard !UserDefaults.standard.bool(forKey: "minidisc_nowlocal_disabled") else { return nil }
+        guard let base = resolveServerBaseURL(activeServerBaseURL: activeServerBaseURL) else { return nil }
+
+        let cacheKey = "\(album ?? "")_\(artist ?? "")_\(title ?? "")"
+        if let cached = cache[cacheKey] {
+            return cached
+        }
+
+        if let result = await performEnrichmentRequest(base: base, album: album, artist: artist, title: title, cacheKey: cacheKey) {
+            return result
+        }
+
+        // Retry with cleaned metadata if raw strings had common tags
+        let cleanAlbum = album.map { cleanMetadata($0) }
+        let cleanArtist = artist.map { cleanMetadata($0) }
+        let cleanTitle = title.map { cleanMetadata($0) }
+
+        if (cleanAlbum != album || cleanArtist != artist || cleanTitle != title) {
+            let cleanKey = "\(cleanAlbum ?? "")_\(cleanArtist ?? "")_\(cleanTitle ?? "")"
+            if let cachedClean = cache[cleanKey] {
+                cache[cacheKey] = cachedClean
+                return cachedClean
+            }
+            if let cleanResult = await performEnrichmentRequest(base: base, album: cleanAlbum, artist: cleanArtist, title: cleanTitle, cacheKey: cleanKey) {
+                cache[cacheKey] = cleanResult
+                return cleanResult
+            }
+        }
+
         return nil
     }
 
