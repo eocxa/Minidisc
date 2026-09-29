@@ -178,46 +178,31 @@ struct FullPlayerView: View {
         coverArtId: String,
         showingQueue: Bool
     ) -> some View {
+        let isCompact = showLyrics || showingQueue
+
         VStack(spacing: 0) {
             VStack(spacing: 0) {
-                flowGap((showLyrics || showingQueue) ? 44 : Self.playerTopGap)
+                flowGap(isCompact ? 36 : Self.playerTopGap)
 
                 ZStack {
-                    if showLyrics, let lyricsVM = lyricsViewModel {
-                        LyricsView(viewModel: lyricsVM)
-                            .frame(maxWidth: .infinity)
-                            .padding(.horizontal, 20)
-                            .mask(
-                                LinearGradient(
-                                    stops: [
-                                        .init(color: .clear, location: 0),
-                                        .init(color: .black, location: 0.1),
-                                        .init(color: .black, location: 0.8),
-                                        .init(color: .clear, location: 1)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
+                    if showLyrics {
+                        flowingLyricsContent(playerState)
                             .transition(.opacity)
                     } else if showingQueue {
                         flowingQueueContent(playerState)
                             .transition(.opacity)
                     }
 
-                    // Keep the cover mounted across player and queue for matched geometry.
-                    if !showLyrics {
-                        flowingCover(playerState, coverArtId: coverArtId, isSource: !showingQueue)
-                            .allowsHitTesting(!showingQueue)
-                            .padding(.horizontal, showingQueue ? 0 : Self.playerCoverHPadding)
-                            .transition(.opacity)
-                    }
+                    // Keep the cover mounted across player, queue and lyrics for matched geometry.
+                    flowingCover(playerState, coverArtId: coverArtId, isSource: !isCompact)
+                        .allowsHitTesting(!isCompact)
+                        .padding(.horizontal, isCompact ? 0 : Self.playerCoverHPadding)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                flowGap(Self.playerCoverToTitleGap)
+                if !isCompact {
+                    flowGap(Self.playerCoverToTitleGap)
 
-                if !showingQueue {
                     TrackInfoSection(
                         playerState: playerState,
                         container: container,
@@ -238,7 +223,7 @@ struct FullPlayerView: View {
                         isAtmos: currentTrackEnrichment?.isAtmos ?? false
                     )
                     .padding(.horizontal, Self.playerHorizontalPadding)
-                    .padding(.top, MinidiscSpacing.m)
+                    .padding(.top, isCompact ? MinidiscSpacing.s : MinidiscSpacing.m)
                     .disabled(!playerState.isPlaybackAvailable)
                     .opacity(playerState.isPlaybackAvailable ? 1.0 : 0.4)
                 }
@@ -250,19 +235,19 @@ struct FullPlayerView: View {
                     keepsPauseIcon: trackSwipe.keepsPauseIcon,
                     contentColor: vm.contentColor
                 )
-                .padding(.top, Self.playerControlsSpacing)
+                .padding(.top, isCompact ? MinidiscSpacing.m : Self.playerControlsSpacing)
 
-                if dynamicTypeSize < .accessibility1 {
+                if !isCompact && dynamicTypeSize < .accessibility1 {
                     VolumeSection(contentColor: vm.contentColor, secondaryContentColor: vm.secondaryContentColor)
                         .padding(.horizontal, Self.playerHorizontalPadding)
                         .padding(.top, Self.playerControlsSpacing)
                 }
 
-                flowGap((showLyrics || showingQueue) ? MinidiscSpacing.xs : 40)
+                flowGap(isCompact ? MinidiscSpacing.xs : 40)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .animation(.smooth(duration: 0.3), value: showLyrics)
-            .animation(.smooth(duration: 0.3), value: surface)
+            .animation(.spring(response: 0.45, dampingRatio: 0.82), value: showLyrics)
+            .animation(.spring(response: 0.45, dampingRatio: 0.82), value: surface)
 
             BottomToolbar(
                 showLyrics: $showLyrics,
@@ -288,12 +273,12 @@ struct FullPlayerView: View {
         GeometryReader { geo in
             let artworkSide = min(geo.size.width, geo.size.height)
             Group {
-                if let animatedURL = resolvedAnimatedCoverURL, isSource {
+                if let animatedURL = resolvedAnimatedCoverURL {
                     MotionArtworkView(
                         videoURL: animatedURL,
                         fallbackId: coverArtId,
                         fallbackImage: initialArtwork?.id == coverArtId ? initialArtwork?.image : nil,
-                        cornerRadius: MinidiscCornerRadius.large,
+                        cornerRadius: isSource ? MinidiscCornerRadius.large : MinidiscCornerRadius.standard,
                         isPaused: playerState.playbackState != .playing
                     )
                 } else {
@@ -309,20 +294,68 @@ struct FullPlayerView: View {
             }
             .matchedGeometryEffect(id: "playerArtwork", in: artworkNamespace ?? morphNS, isSource: isSource)
             .frame(width: isSource ? artworkSide : nil, height: isSource ? artworkSide : nil)
-                .shadow(
-                    color: isSource ? Color.black.opacity(0.28) : .clear,
-                    radius: 18,
-                    y: 10
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .trackSwipeGesture(
-                    interaction: trackSwipe,
+            .shadow(
+                color: isSource ? Color.black.opacity(0.28) : Color.black.opacity(0.12),
+                radius: isSource ? 18 : 6,
+                y: isSource ? 10 : 3
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .trackSwipeGesture(
+                interaction: trackSwipe,
+                playerState: playerState,
+                playerService: container?.playerService,
+                reduceMotion: reduceMotion,
+                isEnabled: isSource && playerState.isPlaybackAvailable && !playerState.isLiveStream
+            )
+            .accessibilityIdentifier("player.artwork")
+        }
+    }
+
+    private func flowingLyricsContent(_ playerState: PlayerState) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: MinidiscSpacing.m) {
+                // Invisible endpoint for the cover's matched-geometry transition.
+                Color.clear
+                    .frame(width: 56, height: 56)
+                    .matchedGeometryEffect(id: "playerArtwork", in: artworkNamespace ?? morphNS, isSource: true)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.45, dampingRatio: 0.82)) {
+                            showLyrics = false
+                        }
+                    }
+
+                TrackInfoSection(
                     playerState: playerState,
-                    playerService: container?.playerService,
-                    reduceMotion: reduceMotion,
-                    isEnabled: isSource && playerState.isPlaybackAvailable && !playerState.isLiveStream
+                    container: container,
+                    contentColor: vm.contentColor,
+                    secondaryContentColor: vm.secondaryContentColor,
+                    compact: true
                 )
-                .accessibilityIdentifier("player.artwork")
+            }
+            .padding(.horizontal, MinidiscSpacing.l)
+            .padding(.top, MinidiscSpacing.s)
+
+            if let lyricsVM = lyricsViewModel {
+                LyricsView(viewModel: lyricsVM)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.horizontal, 16)
+                    .mask(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: .black, location: 0.08),
+                                .init(color: .black, location: 0.90),
+                                .init(color: .clear, location: 1)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
     }
 
@@ -333,6 +366,12 @@ struct FullPlayerView: View {
                 Color.clear
                     .frame(width: 56, height: 56)
                     .matchedGeometryEffect(id: "playerArtwork", in: artworkNamespace ?? morphNS, isSource: true)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.45, dampingRatio: 0.82)) {
+                            surface = .player
+                        }
+                    }
 
                 TrackInfoSection(
                     playerState: playerState,

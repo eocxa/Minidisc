@@ -448,7 +448,7 @@ struct TTMLLyricsView: View {
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 220)
+                    .padding(.vertical, 160)
                 }
                 .scrollIndicators(.hidden)
                 .onChange(of: viewModel.currentLineIndex) { _, newIndex in
