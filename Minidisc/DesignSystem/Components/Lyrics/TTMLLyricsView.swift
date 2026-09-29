@@ -203,25 +203,20 @@ struct TTMLWordSpanView: View {
         let start = word.time
         let end = word.endTime ?? (word.time + 0.35)
 
-        Text(word.text)
+        var config = KaraokeConfiguration.standard
+        if !isLineActive {
+            config.dimColor = Color.white.opacity(0.22)
+            config.glowStrength = 0.0
+            config.bounceHeight = 0.0
+        }
+
+        return Text(word.text)
             .font(font)
             .karaoke(
                 time: currentTime,
                 start: start,
                 end: end,
-                configuration: KaraokeConfiguration(
-                    dimColor: Color.white.opacity(isLineActive ? 0.38 : 0.22),
-                    litColor: .white,
-                    glowColor: .white,
-                    glowAttack: 0.25,
-                    glowRelease: 0.30,
-                    glowStrength: isLineActive ? 1.0 : 0.0,
-                    glowRadius: 4,
-                    bounceHeight: isLineActive ? 1.4 : 0.0,
-                    bounceScale: 0.012,
-                    bounceRise: 0.25,
-                    bounceHold: 0.4
-                )
+                configuration: config
             )
     }
 }
@@ -267,19 +262,20 @@ struct TTMLLineContentView: View {
             } else {
                 let start = line.time
                 let end = line.endTime ?? (line.time + 3.5)
+                var config = KaraokeConfiguration.standard
+                if !isLineActive {
+                    config.dimColor = Color.white.opacity(0.22)
+                    config.glowStrength = 0.0
+                    config.bounceHeight = 0.0
+                }
+
                 Text(line.main?.text ?? line.text)
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .karaoke(
                         time: currentTime,
                         start: start,
                         end: end,
-                        configuration: KaraokeConfiguration(
-                            dimColor: Color.white.opacity(isLineActive ? 0.38 : 0.22),
-                            litColor: .white,
-                            glowColor: .white,
-                            glowStrength: isLineActive ? 0.8 : 0.0,
-                            bounceHeight: isLineActive ? 1.0 : 0.0
-                        )
+                        configuration: config
                     )
                     .multilineTextAlignment(isV2 ? .trailing : .leading)
             }
@@ -301,19 +297,21 @@ struct TTMLLineContentView: View {
                 } else if let adlibText = adlib.text, !adlibText.isEmpty {
                     let start = adlib.time ?? line.time
                     let end = adlib.endTime ?? (start + 3.0)
+                    var config = KaraokeConfiguration.standard
+                    config.litColor = Color.white.opacity(0.85)
+                    if !isLineActive {
+                        config.dimColor = Color.white.opacity(0.18)
+                        config.glowStrength = 0.0
+                        config.bounceHeight = 0.0
+                    }
+
                     Text(adlibText)
                         .font(.system(size: 21, weight: .bold, design: .rounded))
                         .karaoke(
                             time: currentTime,
                             start: start,
                             end: end,
-                            configuration: KaraokeConfiguration(
-                                dimColor: Color.white.opacity(isLineActive ? 0.35 : 0.18),
-                                litColor: .white.opacity(0.85),
-                                glowColor: .white,
-                                glowStrength: isLineActive ? 0.6 : 0.0,
-                                bounceHeight: isLineActive ? 0.8 : 0.0
-                            )
+                            configuration: config
                         )
                         .multilineTextAlignment(isV2 ? .trailing : .leading)
                 }
