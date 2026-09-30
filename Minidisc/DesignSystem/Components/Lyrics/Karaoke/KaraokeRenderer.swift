@@ -31,9 +31,7 @@ public struct KaraokeRenderer: TextRenderer {
     /// Lets the glow and the bounce draw outside the typographic bounds
     /// without getting clipped.
     public var displayPadding: EdgeInsets {
-        let glowPad = config.glowStrength > 0 ? config.glowRadius * 2.6 * 2 + 6 : 6
-        return EdgeInsets(top: glowPad + config.bounceHeight * 1.3,
-                          leading: glowPad, bottom: glowPad, trailing: glowPad)
+        EdgeInsets.zero
     }
 
     public func draw(layout: Text.Layout, in context: inout GraphicsContext) {
@@ -125,10 +123,10 @@ public struct KaraokeRenderer: TextRenderer {
 
             var litCtx = base
             if glow > 0.02 {
-                litCtx.addFilter(.shadow(color: config.glowColor.opacity(0.62 * glow),
+                litCtx.addFilter(.shadow(color: config.glowColor.opacity(0.28 * glow),
                                          radius: config.glowRadius))
-                litCtx.addFilter(.shadow(color: config.glowColor.opacity(0.30 * glow),
-                                         radius: config.glowRadius * 2.6))
+                litCtx.addFilter(.shadow(color: config.glowColor.opacity(0.12 * glow),
+                                         radius: config.glowRadius * 1.8))
             }
             litCtx.drawLayer { (l: inout GraphicsContext) in
                 l.draw(item.slice)

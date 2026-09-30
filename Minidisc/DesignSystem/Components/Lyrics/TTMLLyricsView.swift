@@ -445,6 +445,20 @@ struct TTMLLyricsView: View {
                             )
                             .id(index)
                         }
+
+                        if let composer = lyricsResponse.composer, !composer.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                (Text("Compositores: ")
+                                    .font(.system(size: 14, weight: .regular))
+                                    .foregroundStyle(Color.white.opacity(0.45))
+                                + Text(composer)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(Color.white.opacity(0.65)))
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 28)
+                            .padding(.bottom, 40)
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 36)
@@ -456,7 +470,8 @@ struct TTMLLyricsView: View {
                           !viewModel.isUserScrolling,
                           let newIndex else { return }
                     withAnimation(.easeInOut(duration: 0.35)) {
-                        proxy.scrollTo(newIndex, anchor: .center)
+                        let anchor: UnitPoint = (newIndex == 0) ? .top : UnitPoint(x: 0.5, y: 0.22)
+                        proxy.scrollTo(newIndex, anchor: anchor)
                     }
                 }
                 .onScrollPhaseChange { _, newPhase in
@@ -469,31 +484,6 @@ struct TTMLLyricsView: View {
                     default:
                         break
                     }
-                }
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    HStack {
-                        if let composer = lyricsResponse.composer, !composer.isEmpty {
-                            Text(composer)
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(.white.opacity(0.6))
-                                .lineLimit(1)
-                        }
-
-                        Spacer()
-
-                        Button {
-                            viewModel.autoScrollEnabled.toggle()
-                        } label: {
-                            Image(systemName: viewModel.autoScrollEnabled
-                                ? "arrow.up.arrow.down.circle.fill"
-                                : "arrow.up.arrow.down.circle")
-                                .font(.title3)
-                                .foregroundStyle(.white.opacity(0.8))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 10)
                 }
             }
         }

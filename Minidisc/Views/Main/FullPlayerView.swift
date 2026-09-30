@@ -49,7 +49,7 @@ struct FullPlayerView: View {
 
     private var resolvedAnimatedCoverURL: URL? {
         guard !UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_disabled") else { return nil }
-        let path = currentTrackEnrichment?.animatedTallUrl ?? currentTrackEnrichment?.animatedSquareUrl
+        let path = currentTrackEnrichment?.animatedSquareUrl
         return NowLocalService.shared.resolveArtworkURL(
             path: path,
             activeServerBaseURL: container?.serverState.activeServer?.baseURL
@@ -58,6 +58,10 @@ struct FullPlayerView: View {
 
     private var hasMotionCanvas: Bool {
         resolvedAnimatedCoverURL != nil
+    }
+
+    private var isCompact: Bool {
+        showLyrics || (surface == .queue && !(container?.playerState.isLiveStream ?? false))
     }
 
     // MARK: - Player layout
@@ -169,7 +173,12 @@ struct FullPlayerView: View {
         surfaceStack(playerState, coverArtId: coverArtId, showingQueue: showingQueue)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .minidiscContentWidth()
-            .padding(contentInsets)
+            .padding(EdgeInsets(
+                top: (hasMotionCanvas && !isCompact) ? 0 : contentInsets.top,
+                leading: contentInsets.leading,
+                bottom: contentInsets.bottom,
+                trailing: contentInsets.trailing
+            ))
             .environment(\.colorScheme, .dark)
             .environment(\.minidiscPlayingAccent, MinidiscColors.accent)
         .background {
@@ -187,7 +196,7 @@ struct FullPlayerView: View {
 
         VStack(spacing: 0) {
             VStack(spacing: 0) {
-                flowGap(isCompact ? 36 : Self.playerTopGap)
+                flowGap(isCompact ? 36 : (hasMotionCanvas ? 0 : Self.playerTopGap))
 
                 ZStack {
                     if showLyrics {
@@ -290,14 +299,13 @@ struct FullPlayerView: View {
                             isPaused: playerState.playbackState != .playing
                         )
                         .aspectRatio(contentMode: .fill)
-                        .frame(width: geo.size.width, height: min(geo.size.height, 460))
+                        .frame(width: geo.size.width, height: geo.size.width)
                         .clipped()
                         .mask(
                             LinearGradient(
                                 stops: [
                                     .init(color: .black, location: 0),
-                                    .init(color: .black, location: 0.62),
-                                    .init(color: .black.opacity(0.6), location: 0.80),
+                                    .init(color: .black, location: 0.667),
                                     .init(color: .clear, location: 1.0)
                                 ],
                                 startPoint: .top,
@@ -326,7 +334,7 @@ struct FullPlayerView: View {
             }
             .matchedGeometryEffect(id: "playerArtwork", in: artworkNamespace ?? morphNS, isSource: isSource)
             .frame(width: isSource ? (isCanvas ? geo.size.width : artworkSide) : nil,
-                   height: isSource ? (isCanvas ? min(geo.size.height, 460) : artworkSide) : nil)
+                   height: isSource ? (isCanvas ? geo.size.width : artworkSide) : nil)
             .shadow(
                 color: isCanvas ? .clear : (isSource ? Color.black.opacity(0.28) : Color.black.opacity(0.12)),
                 radius: isSource ? 18 : 6,
@@ -488,6 +496,7 @@ struct FullPlayerView: View {
                 .frame(maxWidth: .infinity, minHeight: 28, alignment: .top)
                 .contentShape(Rectangle())
         }
+        .padding(.top, (hasMotionCanvas && !isCompact) ? contentInsets.top : 0)
         .buttonStyle(.plain)
         .accessibilityLabel("Close player")
     }

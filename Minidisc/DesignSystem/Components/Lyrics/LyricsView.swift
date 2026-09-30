@@ -74,50 +74,10 @@ struct LyricsView: View {
                     break
                 }
             }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                header
-            }
         }
     }
 
-    // MARK: - Header
 
-    @ViewBuilder
-    private var header: some View {
-        HStack(spacing: 16) {
-            if viewModel.availableLanguages.count > 1 {
-                Menu {
-                    ForEach(viewModel.availableLanguages, id: \.self) { lang in
-                        Button(displayName(for: lang)) {
-                            viewModel.selectLanguage(lang)
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "globe")
-                        Text(displayName(for: viewModel.selectedLanguage ?? "und"))
-                    }
-                    .font(.callout)
-                    .foregroundStyle(.white.opacity(0.8))
-                }
-            }
-
-            Spacer()
-
-            Button {
-                viewModel.autoScrollEnabled.toggle()
-            } label: {
-                Image(systemName: viewModel.autoScrollEnabled
-                    ? "arrow.up.arrow.down.circle.fill"
-                    : "arrow.up.arrow.down.circle")
-                    .font(.title3)
-                    .foregroundStyle(.white.opacity(0.8))
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 32)
-        .padding(.vertical, 12)
-    }
 
     // MARK: - Empty states
 
@@ -165,10 +125,5 @@ struct LyricsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Helpers
 
-    private func displayName(for lang: String) -> String {
-        guard lang != "und", lang != "xxx" else { return "—" }
-        return Locale.current.localizedString(forLanguageCode: lang)?.capitalized ?? lang.uppercased()
-    }
 }
