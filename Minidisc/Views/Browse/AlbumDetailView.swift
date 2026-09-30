@@ -216,34 +216,17 @@ struct AlbumDetailView: View {
         return trackArtist != albumArtist
     }
 
+    private var topScrollEdges: Edge.Set {
+        resolvedAnimatedTallURL != nil ? .top : []
+    }
+
     var body: some View {
+        let hasTall = resolvedAnimatedTallURL != nil
+        let songs = displaySongs()
+
         ScrollView {
             LazyVStack(spacing: 0) {
-                let songs = displaySongs()
-
-                AlbumArtworkSection(
-                    coverArtId: viewModel?.coverArtId ?? coverArtId ?? albumId,
-                    coverImage: effectiveInitialImage,
-                    albumName: viewModel?.albumName ?? initialName,
-                    animatedArtworkURL: resolvedAnimatedSquareURL,
-                    animatedTallURL: resolvedAnimatedTallURL
-                )
-                .padding(.top, resolvedAnimatedTallURL != nil ? 0 : MinidiscSpacing.xxl)
-                .zIndex(1)
-
-                AlbumMetadataSection(
-                    albumName: viewModel?.albumName ?? initialName,
-                    artistName: viewModel?.artistName,
-                    artistId: viewModel?.artistId,
-                    year: viewModel?.year,
-                    genre: viewModel?.genre,
-                    isLoading: viewModel == nil,
-                    isOffline: viewModel?.isOffline == true,
-                    isLossless: enrichment?.isLossless ?? false,
-                    isAtmos: enrichment?.isAtmos ?? false
-                )
-                .padding(.top, resolvedAnimatedTallURL != nil ? -80 : MinidiscSpacing.xl)
-                .zIndex(2)
+                headerSection(hasTall: hasTall)
 
                 AlbumPlaybackActions(
                     albumId: albumId,
@@ -262,88 +245,11 @@ struct AlbumDetailView: View {
                 if isLoadingSkeleton {
                     AlbumTrackSkeletonRows()
                 } else if let vm = viewModel {
-                    let serverId = container?.serverState.activeServer?.id ?? UUID()
-                    if songs.isEmpty {
-                        if mode == .downloadedOnly {
-                            EmptyStateView(
-                                systemImage: "arrow.down.circle.slash",
-                                title: "No Downloaded Tracks",
-                                subtitle: "No tracks from this album have been downloaded."
-                            )
-                        } else if let error = vm.error {
-                            EmptyStateView(
-                                systemImage: "exclamationmark.triangle",
-                                title: "Unable to Load Album",
-                                subtitle: LocalizedStringKey(error.displayMessage),
-                                action: .init(label: "Retry") { Task { await vm.load() } }
-                            )
-                        } else {
-                            EmptyStateView(
-                                systemImage: "music.note",
-                                title: "No Tracks",
-                                subtitle: "This album doesn't have any tracks yet."
-                            )
-                        }
-                    } else {
-                        AlbumSongRows(
-                            songs: songs,
-                            albumId: albumId,
-                            serverId: serverId,
-                            showArtists: shouldShowTrackArtists(in: songs),
-                            downloadingIds: vm.downloadingIds,
-                            titleColor: headerTextColor,
-                            secondaryColor: headerSecondaryColor,
-                            onTap: { index in
-                                Task {
-                                    do {
-                                        try await container?.playerService.play(tracks: songs, startIndex: index)
-                                    } catch {
-                                        Logger.player.error("[PLAYBACK] play failed: \(error, privacy: .public)")
-                if !UserFacingError.isCancellation(error) {
-                    container?.toastService.showError(UserFacingError.from(error).displayMessage)
-                }
-                                    }
-                                }
-                            },
-                            onDownload: (mode == .downloadedOnly || vm.isOffline || vm.isDownloadingAlbum) ? nil : { songId in
-                                Task { await vm.downloadSong(id: songId) }
-                            },
-                            onRemoveDownload: { songId in
-                                Task { await container?.toastService.perform { try await container?.downloadService.remove(songId: songId, serverId: serverId) } }
-                            },
-                            onAddToPlaylist: playlistAddition.present
-                        )
-
-                        AlbumReleaseInformationSection(
-                            releaseDate: vm.releaseDate,
-                            fallbackYear: vm.year,
-                            songCount: songs.count,
-                            totalDuration: songs.reduce(0) { $0 + $1.duration },
-                            releaseTypes: vm.releaseTypes,
-                            version: vm.version,
-                            recordLabels: vm.recordLabels,
-                            audioFormats: songs.compactMap(\.audioFormat),
-                            textColor: headerSecondaryColor
-                        )
-
-                        if case .full = mode, !vm.isOffline {
-                            if let artistId = vm.artistId,
-                               let artistName = vm.artistName,
-                               !artistName.isEmpty {
-                                AlbumMoreByArtistSection(
-                                    artistId: artistId,
-                                    artistName: artistName,
-                                    currentAlbumId: albumId
-                                )
-                            }
-
-                            AlbumYouMightAlsoLikeSection(albums: visibleRecommendedAlbums)
-                        }
-                    }
+                    trackListContent(songs: songs, vm: vm)
                 }
             }
         }
-        .ignoresSafeArea(.container, edges: resolvedAnimatedTallURL != nil ? .top : [])
+        .ignoresSafeArea(.container, edges: topScrollEdges)
         .toolbarBackground(.hidden, for: .navigationBar)
         .refreshable { await viewModel?.load() }
         .miniPlayerBottomMargin()
@@ -515,6 +421,117 @@ struct AlbumDetailView: View {
             Logger.library.warning(
                 "Unable to load album recommendations for \(request.albumId, privacy: .public): \(error, privacy: .public)"
             )
+        }
+    }
+
+    // MARK: - Subviews for type-check performance
+
+    @ViewBuilder
+    private func headerSection(hasTall: Bool) -> some View {
+        AlbumArtworkSection(
+            coverArtId: viewModel?.coverArtId ?? coverArtId ?? albumId,
+            coverImage: effectiveInitialImage,
+            albumName: viewModel?.albumName ?? initialName,
+            animatedArtworkURL: resolvedAnimatedSquareURL,
+            animatedTallURL: resolvedAnimatedTallURL
+        )
+        .padding(.top, hasTall ? 0 : MinidiscSpacing.xxl)
+        .zIndex(1)
+
+        AlbumMetadataSection(
+            albumName: viewModel?.albumName ?? initialName,
+            artistName: viewModel?.artistName,
+            artistId: viewModel?.artistId,
+            year: viewModel?.year,
+            genre: viewModel?.genre,
+            isLoading: viewModel == nil,
+            isOffline: viewModel?.isOffline == true,
+            isLossless: enrichment?.isLossless ?? false,
+            isAtmos: enrichment?.isAtmos ?? false
+        )
+        .padding(.top, hasTall ? -80 : MinidiscSpacing.xl)
+        .zIndex(2)
+    }
+
+    @ViewBuilder
+    private func trackListContent(songs: [DisplayableSong], vm: AlbumDetailViewModel) -> some View {
+        let serverId = container?.serverState.activeServer?.id ?? UUID()
+        if songs.isEmpty {
+            if mode == .downloadedOnly {
+                EmptyStateView(
+                    systemImage: "arrow.down.circle.slash",
+                    title: "No Downloaded Tracks",
+                    subtitle: "No tracks from this album have been downloaded."
+                )
+            } else if let error = vm.error {
+                EmptyStateView(
+                    systemImage: "exclamationmark.triangle",
+                    title: "Unable to Load Album",
+                    subtitle: LocalizedStringKey(error.displayMessage),
+                    action: .init(label: "Retry") { Task { await vm.load() } }
+                )
+            } else {
+                EmptyStateView(
+                    systemImage: "music.note",
+                    title: "No Tracks",
+                    subtitle: "This album doesn't have any tracks yet."
+                )
+            }
+        } else {
+            AlbumSongRows(
+                songs: songs,
+                albumId: albumId,
+                serverId: serverId,
+                showArtists: shouldShowTrackArtists(in: songs),
+                downloadingIds: vm.downloadingIds,
+                titleColor: headerTextColor,
+                secondaryColor: headerSecondaryColor,
+                onTap: { index in
+                    Task {
+                        do {
+                            try await container?.playerService.play(tracks: songs, startIndex: index)
+                        } catch {
+                            Logger.player.error("[PLAYBACK] play failed: \(error, privacy: .public)")
+                            if !UserFacingError.isCancellation(error) {
+                                container?.toastService.showError(UserFacingError.from(error).displayMessage)
+                            }
+                        }
+                    }
+                },
+                onDownload: (mode == .downloadedOnly || vm.isOffline || vm.isDownloadingAlbum) ? nil : { songId in
+                    Task { await vm.downloadSong(id: songId) }
+                },
+                onRemoveDownload: { songId in
+                    Task { await container?.toastService.perform { try await container?.downloadService.remove(songId: songId, serverId: serverId) } }
+                },
+                onAddToPlaylist: playlistAddition.present
+            )
+
+            AlbumReleaseInformationSection(
+                releaseDate: vm.releaseDate,
+                fallbackYear: vm.year,
+                songCount: songs.count,
+                totalDuration: songs.reduce(0) { $0 + $1.duration },
+                releaseTypes: vm.releaseTypes,
+                version: vm.version,
+                recordLabels: vm.recordLabels,
+                audioFormats: songs.compactMap(\.audioFormat),
+                textColor: headerSecondaryColor
+            )
+
+            if case .full = mode, !vm.isOffline {
+                if let artistId = vm.artistId,
+                   let artistName = vm.artistName,
+                   !artistName.isEmpty {
+                    AlbumMoreByArtistSection(
+                        artistId: artistId,
+                        artistName: artistName,
+                        currentAlbumId: albumId
+                    )
+                }
+
+                AlbumYouMightAlsoLikeSection(albums: visibleRecommendedAlbums)
+            }
         }
     }
 }
