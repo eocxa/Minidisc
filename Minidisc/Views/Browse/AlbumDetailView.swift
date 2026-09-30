@@ -220,7 +220,12 @@ struct AlbumDetailView: View {
         resolvedAnimatedTallURL != nil ? .top : []
     }
 
-    var body: some View {
+    private var enrichmentKey: String {
+        "\(viewModel?.albumName ?? initialName)_\(viewModel?.artistName ?? initialArtistName ?? "")"
+    }
+
+    @ViewBuilder
+    private var scrollContent: some View {
         let hasTall = resolvedAnimatedTallURL != nil
         let songs = displaySongs()
 
@@ -249,140 +254,171 @@ struct AlbumDetailView: View {
                 }
             }
         }
-        .ignoresSafeArea(.container, edges: topScrollEdges)
+        .ignoresSafeArea(.all, edges: topScrollEdges)
         .toolbarBackground(.hidden, for: .navigationBar)
         .refreshable { await viewModel?.load() }
         .miniPlayerBottomMargin()
         .minidiscHideTopScrollEdgeEffect()
         .minidiscSongSwipeContainer()
-        .alert("Remove downloaded album?", isPresented: $showDeleteAlert) {
-            Button("Remove", role: .destructive) { Task { await viewModel?.deleteDownload() } }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("The audio files will be deleted from this device.")
+    }
+
+    @ToolbarContentBuilder
+    private var albumToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            Button("Back", systemImage: "chevron.left") {
+                dismiss()
+            }
+            .tint(palette.contentColor)
         }
-        .background(AlbumDetailPageBackground(palette: palette))
-        .minidiscContentWidth()
-        .environment(\.minidiscPlayingAccent, palette.contentColor)
-        .environment(\.colorScheme, palette.preferredContentScheme ?? colorScheme)
-        .navigationTitle("")
-        .navigationBarTitleDisplayModeInline()
-        .navigationBarBackButtonHidden(true)
-        .enableSwipeBack()
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button("Back", systemImage: "chevron.left") {
-                    dismiss()
+        ToolbarItem(placement: .primaryAction) {
+            favoriteToolbarButton
+        }
+        ToolbarItem(placement: .primaryAction) {
+            albumOptionsMenu
+        }
+    }
+
+    @ViewBuilder
+    private var favoriteToolbarButton: some View {
+        Button(
+            isAlbumFavorite ? "Remove from Favorites" : "Add to Favorites",
+            systemImage: isAlbumFavorite ? "star.fill" : "star"
+        ) {
+            HapticFeedback.light.trigger()
+            Task {
+                if isAlbumFavorite {
+                    await container?.toastService.perform { try await container?.favoritesService.unstar(itemType: .album, itemId: albumId) }
+                } else {
+                    await container?.toastService.perform { try await container?.favoritesService.star(itemType: .album, itemId: albumId) }
                 }
-                .tint(palette.contentColor)
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button(
-                    isAlbumFavorite ? "Remove from Favorites" : "Add to Favorites",
-                    systemImage: isAlbumFavorite ? "star.fill" : "star"
-                ) {
-                    HapticFeedback.light.trigger()
-                    Task {
-                        if isAlbumFavorite {
-                            await container?.toastService.perform { try await container?.favoritesService.unstar(itemType: .album, itemId: albumId) }
-                        } else {
-                            await container?.toastService.perform { try await container?.favoritesService.star(itemType: .album, itemId: albumId) }
-                        }
-                    }
-                }
-                .tint(palette.contentColor)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isAlbumFavorite)
-                .disabled(!isOnline)
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Menu("More options", systemImage: "ellipsis") {
-                    Group {
-                        Button("Select Songs", systemImage: "checkmark.circle") {
-                            songSelection = SongSelectionRequest(songs: displaySongs())
-                        }
-                        .disabled(container?.serverState.isOnline != true || displaySongs().isEmpty)
-                        Divider()
-                        Button("Instant Mix", systemImage: instantMixSymbol) {
-                            HapticFeedback.medium.trigger()
-                            startInstantMix(from: .album(id: albumId), using: container)
-                        }
-                        .disabled(displaySongs().isEmpty || !isOnline)
-                        Divider()
-                        // ColorPicker requires a sheet rather than Menu content.
-                        Button("Theme colour", systemImage: "paintpalette") {
-                            showThemeColorSheet = true
-                        }
-                        if colorExtractor.colorOverride(for: albumCoverId) != nil {
-                            Button("Reset to cover colour", systemImage: "arrow.uturn.backward") {
-                                resetThemeColor()
-                            }
-                        }
-                    }
-                    .tint(palette.contentColor)
-                }
-                .tint(palette.contentColor)
             }
         }
-        .sheet(item: $songSelection) { SongSelectionSheet(request: $0) }
-        .sheet(isPresented: $showThemeColorSheet) {
-            ThemeColorSheet(
-                color: Binding(
-                    get: { colorExtractor.cachedColor(for: albumCoverId) ?? dominantColor },
-                    set: { newColor in
-                        colorExtractor.setColorOverride(newColor, forIds: albumThemeIds)
-                        dominantColor = newColor
+        .tint(palette.contentColor)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isAlbumFavorite)
+        .disabled(!isOnline)
+    }
+
+    @ViewBuilder
+    private var albumOptionsMenu: some View {
+        Menu("More options", systemImage: "ellipsis") {
+            Group {
+                Button("Select Songs", systemImage: "checkmark.circle") {
+                    songSelection = SongSelectionRequest(songs: displaySongs())
+                }
+                .disabled(container?.serverState.isOnline != true || displaySongs().isEmpty)
+                Divider()
+                Button("Instant Mix", systemImage: instantMixSymbol) {
+                    HapticFeedback.medium.trigger()
+                    startInstantMix(from: .album(id: albumId), using: container)
+                }
+                .disabled(displaySongs().isEmpty || !isOnline)
+                Divider()
+                Button("Theme colour", systemImage: "paintpalette") {
+                    showThemeColorSheet = true
+                }
+                if colorExtractor.colorOverride(for: albumCoverId) != nil {
+                    Button("Reset to cover colour", systemImage: "arrow.uturn.backward") {
+                        resetThemeColor()
                     }
-                ),
-                hasOverride: colorExtractor.colorOverride(for: albumCoverId) != nil,
-                footerText: "Overrides the colour taken from the cover, here and anywhere else this album appears.",
-                onReset: resetThemeColor
+                }
+            }
+            .tint(palette.contentColor)
+        }
+        .tint(palette.contentColor)
+    }
+
+    @ViewBuilder
+    private var themeColorSheetView: some View {
+        ThemeColorSheet(
+            color: Binding(
+                get: { colorExtractor.cachedColor(for: albumCoverId) ?? dominantColor },
+                set: { newColor in
+                    colorExtractor.setColorOverride(newColor, forIds: albumThemeIds)
+                    dominantColor = newColor
+                }
+            ),
+            hasOverride: colorExtractor.colorOverride(for: albumCoverId) != nil,
+            footerText: "Overrides the colour taken from the cover, here and anywhere else this album appears.",
+            onReset: resetThemeColor
+        )
+    }
+
+    private func handleServerOnlineChanged() async {
+        guard let c = container else { return }
+        if viewModel == nil {
+            viewModel = AlbumDetailViewModel(
+                albumId: albumId,
+                libraryService: c.libraryService,
+                downloadService: c.downloadService,
+                toastService: c.toastService,
+                serverState: c.serverState,
+                offlineFavorites: mode == .downloadedOnly ? nil : c.offlineFavoritesStore
             )
         }
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbarColorScheme(palette.preferredContentScheme, for: .navigationBar)
-        .task(id: container?.serverState.isOnline) {
-            guard let c = container else { return }
-            if viewModel == nil {
-                viewModel = AlbumDetailViewModel(
-                    albumId: albumId,
-                    libraryService: c.libraryService,
-                    downloadService: c.downloadService,
-                    toastService: c.toastService,
-                    serverState: c.serverState,
-                    offlineFavorites: mode == .downloadedOnly ? nil : c.offlineFavoritesStore
-                )
-            }
-            await viewModel?.load()
-        }
-        .task(id: viewModel?.coverArtId) {
-            guard let artId = viewModel?.coverArtId else { return }
+        await viewModel?.load()
+    }
 
-            let cached = colorExtractor.dominantColor(for: artId, image: nil)
-            if cached != .clear {
-                dominantColor = cached
-                return
-            }
+    private func handleCoverArtChanged(artId: String?) async {
+        guard let artId else { return }
+        let cached = colorExtractor.dominantColor(for: artId, image: nil)
+        if cached != .clear {
+            dominantColor = cached
+            return
+        }
+        await loadDominantColor(coverArtId: artId)
+    }
 
-            await loadDominantColor(coverArtId: artId)
+    private func handleRecommendationChanged(request: AlbumRecommendationRequest?) async {
+        guard let request else {
+            recommendedAlbums = []
+            return
         }
-        .task(id: recommendationRequest) {
-            guard let recommendationRequest else {
-                recommendedAlbums = []
-                return
-            }
+        await loadAlbumRecommendations(for: request)
+    }
 
-            await loadAlbumRecommendations(for: recommendationRequest)
-        }
-        .task(id: "\(viewModel?.albumName ?? initialName)_\(viewModel?.artistName ?? initialArtistName ?? "")") {
-            let album = viewModel?.albumName ?? initialName
-            let artist = viewModel?.artistName ?? initialArtistName
-            enrichment = await NowLocalService.shared.fetchEnrichment(
-                album: album,
-                artist: artist,
-                activeServerBaseURL: container?.serverState.activeServer?.baseURL
-            )
-        }
-        .minidiscZoomTransition(sourceID: zoomSourceId, in: zoomNamespace)
+    private func handleEnrichmentTask() async {
+        let album = viewModel?.albumName ?? initialName
+        let artist = viewModel?.artistName ?? initialArtistName
+        enrichment = await NowLocalService.shared.fetchEnrichment(
+            album: album,
+            artist: artist,
+            activeServerBaseURL: container?.serverState.activeServer?.baseURL
+        )
+    }
+
+    var body: some View {
+        scrollContent
+            .alert("Remove downloaded album?", isPresented: $showDeleteAlert) {
+                Button("Remove", role: .destructive) { Task { await viewModel?.deleteDownload() } }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("The audio files will be deleted from this device.")
+            }
+            .background(AlbumDetailPageBackground(palette: palette))
+            .minidiscContentWidth()
+            .environment(\.minidiscPlayingAccent, palette.contentColor)
+            .environment(\.colorScheme, palette.preferredContentScheme ?? colorScheme)
+            .navigationTitle("")
+            .navigationBarTitleDisplayModeInline()
+            .navigationBarBackButtonHidden(true)
+            .enableSwipeBack()
+            .toolbar { albumToolbarContent }
+            .sheet(item: $songSelection) { SongSelectionSheet(request: $0) }
+            .sheet(isPresented: $showThemeColorSheet) { themeColorSheetView }
+            .toolbarColorScheme(palette.preferredContentScheme, for: .navigationBar)
+            .task(id: container?.serverState.isOnline) {
+                await handleServerOnlineChanged()
+            }
+            .task(id: viewModel?.coverArtId) {
+                await handleCoverArtChanged(artId: viewModel?.coverArtId)
+            }
+            .task(id: recommendationRequest) {
+                await handleRecommendationChange(request: recommendationRequest)
+            }
+            .task(id: enrichmentKey) {
+                await handleEnrichmentTask()
+            }
+            .minidiscZoomTransition(sourceID: zoomSourceId, in: zoomNamespace)
     }
 
     // MARK: - Color loading
