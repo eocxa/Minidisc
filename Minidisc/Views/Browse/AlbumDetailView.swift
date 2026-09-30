@@ -343,7 +343,8 @@ struct AlbumDetailView: View {
                 }
             }
         }
-        .ignoresSafeArea(edges: resolvedAnimatedTallURL != nil ? .top : [])
+        .ignoresSafeArea(.container, edges: resolvedAnimatedTallURL != nil ? .top : [])
+        .toolbarBackground(.hidden, for: .navigationBar)
         .refreshable { await viewModel?.load() }
         .miniPlayerBottomMargin()
         .minidiscHideTopScrollEdgeEffect()

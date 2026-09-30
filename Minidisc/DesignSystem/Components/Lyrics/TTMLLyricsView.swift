@@ -235,6 +235,7 @@ struct TTMLLineContentView: View {
     let isLineActive: Bool
     let isV2: Bool
     let hasWordSync: Bool
+    let isUserScrolling: Bool
 
     private var alignment: HorizontalAlignment {
         isV2 ? .trailing : .leading
