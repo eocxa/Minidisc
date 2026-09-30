@@ -228,7 +228,7 @@ struct AlbumDetailView: View {
                     animatedArtworkURL: resolvedAnimatedSquareURL,
                     animatedTallURL: resolvedAnimatedTallURL
                 )
-                .padding(.top, MinidiscSpacing.xxl)
+                .padding(.top, resolvedAnimatedTallURL != nil ? 0 : MinidiscSpacing.xxl)
 
                 AlbumMetadataSection(
                     albumName: viewModel?.albumName ?? initialName,
@@ -633,10 +633,23 @@ struct AlbumArtworkSection: View {
                     videoURL: animatedTallURL,
                     fallbackId: coverArtId,
                     fallbackImage: coverImage,
-                    cornerRadius: MinidiscCornerRadius.large
+                    cornerRadius: 0
                 )
-                .aspectRatio(3 / 4, contentMode: .fit)
-                .frame(maxWidth: 360)
+                .aspectRatio(3 / 4, contentMode: .fill)
+                .frame(maxWidth: .infinity, maxHeight: 440)
+                .clipped()
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black, location: 0.60),
+                            .init(color: .black.opacity(0.5), location: 0.80),
+                            .init(color: .clear, location: 1.0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
                 .id(animatedTallURL)
             } else if let animatedArtworkURL {
                 MotionArtworkView(
@@ -647,6 +660,9 @@ struct AlbumArtworkSection: View {
                 )
                 .aspectRatio(1, contentMode: .fit)
                 .frame(maxWidth: 340)
+                .minidiscCoverStyle(cornerRadius: MinidiscCornerRadius.large)
+                .shadow(color: .black.opacity(0.16), radius: 12, y: 6)
+                .padding(.horizontal, 64)
                 .id(animatedArtworkURL)
             } else {
                 CoverArtView(
@@ -658,11 +674,11 @@ struct AlbumArtworkSection: View {
                 )
                 .aspectRatio(1, contentMode: .fit)
                 .frame(maxWidth: 340)
+                .minidiscCoverStyle(cornerRadius: MinidiscCornerRadius.large)
+                .shadow(color: .black.opacity(0.16), radius: 12, y: 6)
+                .padding(.horizontal, 64)
             }
         }
-        .minidiscCoverStyle(cornerRadius: MinidiscCornerRadius.large)
-        .shadow(color: .black.opacity(0.16), radius: 12, y: 6)
-        .padding(.horizontal, animatedTallURL != nil ? 32 : 64)
         .accessibilityLabel(
             Text(
                 "Artwork for \(albumName)",

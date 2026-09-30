@@ -210,7 +210,7 @@ struct TTMLWordSpanView: View {
     let word: NowLocalLyricWord
     let currentTime: Double
     let isLineActive: Bool
-    var font: Font = .system(size: 28, weight: .bold)
+    var font: Font = .system(size: 34, weight: .bold)
 
     var body: some View {
         let start = word.time
@@ -241,7 +241,7 @@ struct TTMLLineContentView: View {
     }
 
     var body: some View {
-        VStack(alignment: alignment, spacing: isLineActive ? 6 : 2) {
+        VStack(alignment: alignment, spacing: 4) {
             // Main vocals
             if let mainWords = line.main?.words, !mainWords.isEmpty, hasWordSync {
                 LyricsFlowLayout(horizontalAlignment: alignment) {
@@ -250,7 +250,7 @@ struct TTMLLineContentView: View {
                             word: w,
                             currentTime: currentTime,
                             isLineActive: isLineActive,
-                            font: .system(size: 28, weight: .bold)
+                            font: .system(size: 34, weight: .bold)
                         )
                     }
                 }
@@ -261,7 +261,7 @@ struct TTMLLineContentView: View {
                             word: w,
                             currentTime: currentTime,
                             isLineActive: isLineActive,
-                            font: .system(size: 28, weight: .bold)
+                            font: .system(size: 34, weight: .bold)
                         )
                     }
                 }
@@ -270,7 +270,7 @@ struct TTMLLineContentView: View {
                 let end = line.endTime ?? (line.time + 3.5)
 
                 Text(line.main?.text ?? line.text)
-                    .font(.system(size: 28, weight: .bold))
+                    .font(.system(size: 34, weight: .bold))
                     .karaoke(
                         time: currentTime,
                         start: start,
@@ -289,7 +289,7 @@ struct TTMLLineContentView: View {
                                 word: w,
                                 currentTime: currentTime,
                                 isLineActive: isLineActive,
-                                font: .system(size: 21, weight: .bold)
+                                font: .system(size: 24, weight: .bold)
                             )
                         }
                     }
@@ -299,7 +299,7 @@ struct TTMLLineContentView: View {
                     let end = adlib.endTime ?? (start + 3.0)
 
                     Text(adlibText)
-                        .font(.system(size: 21, weight: .bold))
+                        .font(.system(size: 24, weight: .bold))
                         .karaoke(
                             time: currentTime,
                             start: start,
@@ -370,8 +370,7 @@ struct TTMLLyricsLineView: View {
     }
 
     private var scale: CGFloat {
-        guard currentIndex != nil else { return 1.0 }
-        return isLineActive ? 1.03 : (distance > 2 ? 0.96 : 1.0)
+        1.0
     }
 
     var body: some View {
@@ -448,7 +447,8 @@ struct TTMLLyricsView: View {
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 160)
+                    .padding(.top, 36)
+                    .padding(.bottom, 220)
                 }
                 .scrollIndicators(.hidden)
                 .onChange(of: viewModel.currentLineIndex) { _, newIndex in

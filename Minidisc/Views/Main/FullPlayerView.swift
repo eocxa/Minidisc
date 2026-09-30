@@ -49,10 +49,15 @@ struct FullPlayerView: View {
 
     private var resolvedAnimatedCoverURL: URL? {
         guard !UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_disabled") else { return nil }
+        let path = currentTrackEnrichment?.animatedTallUrl ?? currentTrackEnrichment?.animatedSquareUrl
         return NowLocalService.shared.resolveArtworkURL(
-            path: currentTrackEnrichment?.animatedSquareUrl,
+            path: path,
             activeServerBaseURL: container?.serverState.activeServer?.baseURL
         )
+    }
+
+    private var hasMotionCanvas: Bool {
+        resolvedAnimatedCoverURL != nil
     }
 
     // MARK: - Player layout
@@ -196,7 +201,7 @@ struct FullPlayerView: View {
                     // Keep the cover mounted across player, queue and lyrics for matched geometry.
                     flowingCover(playerState, coverArtId: coverArtId, isSource: !isCompact)
                         .allowsHitTesting(!isCompact)
-                        .padding(.horizontal, isCompact ? 0 : Self.playerCoverHPadding)
+                        .padding(.horizontal, isCompact || hasMotionCanvas ? 0 : Self.playerCoverHPadding)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -272,15 +277,42 @@ struct FullPlayerView: View {
     private func flowingCover(_ playerState: PlayerState, coverArtId: String, isSource: Bool) -> some View {
         GeometryReader { geo in
             let artworkSide = min(geo.size.width, geo.size.height)
+            let isCanvas = hasMotionCanvas && isSource
+
             Group {
                 if let animatedURL = resolvedAnimatedCoverURL {
-                    MotionArtworkView(
-                        videoURL: animatedURL,
-                        fallbackId: coverArtId,
-                        fallbackImage: initialArtwork?.id == coverArtId ? initialArtwork?.image : nil,
-                        cornerRadius: isSource ? MinidiscCornerRadius.large : MinidiscCornerRadius.standard,
-                        isPaused: playerState.playbackState != .playing
-                    )
+                    if isCanvas {
+                        MotionArtworkView(
+                            videoURL: animatedURL,
+                            fallbackId: coverArtId,
+                            fallbackImage: initialArtwork?.id == coverArtId ? initialArtwork?.image : nil,
+                            cornerRadius: 0,
+                            isPaused: playerState.playbackState != .playing
+                        )
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width, height: min(geo.size.height, 460))
+                        .clipped()
+                        .mask(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .black, location: 0),
+                                    .init(color: .black, location: 0.62),
+                                    .init(color: .black.opacity(0.6), location: 0.80),
+                                    .init(color: .clear, location: 1.0)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                    } else {
+                        MotionArtworkView(
+                            videoURL: animatedURL,
+                            fallbackId: coverArtId,
+                            fallbackImage: initialArtwork?.id == coverArtId ? initialArtwork?.image : nil,
+                            cornerRadius: isSource ? MinidiscCornerRadius.large : MinidiscCornerRadius.standard,
+                            isPaused: playerState.playbackState != .playing
+                        )
+                    }
                 } else {
                     CoverArtView(id: coverArtId, size: 1000,
                                  initialImage: initialArtwork?.id == coverArtId ? initialArtwork?.image : nil)
@@ -293,9 +325,10 @@ struct FullPlayerView: View {
                 }
             }
             .matchedGeometryEffect(id: "playerArtwork", in: artworkNamespace ?? morphNS, isSource: isSource)
-            .frame(width: isSource ? artworkSide : nil, height: isSource ? artworkSide : nil)
+            .frame(width: isSource ? (isCanvas ? geo.size.width : artworkSide) : nil,
+                   height: isSource ? (isCanvas ? min(geo.size.height, 460) : artworkSide) : nil)
             .shadow(
-                color: isSource ? Color.black.opacity(0.28) : Color.black.opacity(0.12),
+                color: isCanvas ? .clear : (isSource ? Color.black.opacity(0.28) : Color.black.opacity(0.12)),
                 radius: isSource ? 18 : 6,
                 y: isSource ? 10 : 3
             )
@@ -344,9 +377,10 @@ struct FullPlayerView: View {
                         LinearGradient(
                             stops: [
                                 .init(color: .clear, location: 0),
-                                .init(color: .black, location: 0.08),
-                                .init(color: .black, location: 0.90),
-                                .init(color: .clear, location: 1)
+                                .init(color: .black.opacity(0.45), location: 0.04),
+                                .init(color: .black, location: 0.10),
+                                .init(color: .black, location: 0.88),
+                                .init(color: .clear, location: 1.0)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
