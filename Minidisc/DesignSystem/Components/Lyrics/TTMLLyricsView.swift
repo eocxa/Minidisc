@@ -280,8 +280,8 @@ struct TTMLLineContentView: View {
                     .multilineTextAlignment(isV2 ? .trailing : .leading)
             }
 
-            // Adlibs vocals (if present)
-            if line.hasAdlib == true, let adlib = line.adlib {
+            // Adlibs vocals (if present) - only emerge when line is active and not user-scrolling
+            if line.hasAdlib == true, let adlib = line.adlib, isLineActive && !isUserScrolling {
                 if let adlibWords = adlib.words, !adlibWords.isEmpty, hasWordSync {
                     LyricsFlowLayout(horizontalAlignment: alignment) {
                         ForEach(adlibWords) { w in
@@ -293,7 +293,8 @@ struct TTMLLineContentView: View {
                             )
                         }
                     }
-                    .opacity(isLineActive ? 0.85 : 0.35)
+                    .opacity(0.85)
+                    .transition(.opacity.combined(with: .offset(y: 4)))
                 } else if let adlibText = adlib.text, !adlibText.isEmpty {
                     let start = adlib.time ?? line.time
                     let end = adlib.endTime ?? (start + 3.0)
@@ -311,6 +312,7 @@ struct TTMLLineContentView: View {
                             )
                         )
                         .multilineTextAlignment(isV2 ? .trailing : .leading)
+                        .transition(.opacity.combined(with: .offset(y: 4)))
                 }
             }
         }
@@ -322,11 +324,13 @@ struct TTMLLineContentView: View {
 struct TTMLLyricsLineView: View {
     let line: NowLocalLyricLine
     let index: Int
+    let activeIndices: Set<Int>
     let currentIndex: Int?
     let currentTime: Double
     let nextLineTime: Double?
     let hasMultiArtist: Bool
     let hasWordSync: Bool
+    let isUserScrolling: Bool
     let onSeek: () -> Void
 
     private var isV2: Bool {
@@ -337,35 +341,47 @@ struct TTMLLyricsLineView: View {
         line.text == "…" || line.text == "..."
     }
 
-    private var distance: Int {
-        guard let currentIndex else { return 0 }
-        return abs(index - currentIndex)
+    private var isLineActive: Bool {
+        activeIndices.contains(index)
     }
 
-    private var isLineActive: Bool {
-        currentIndex == index
+    private var distance: Int {
+        if isLineActive { return 0 }
+        guard !activeIndices.isEmpty else { return 0 }
+        if let minActive = activeIndices.min(), index < minActive {
+            return minActive - index
+        }
+        if let maxActive = activeIndices.max(), index > maxActive {
+            return index - maxActive
+        }
+        return 0
     }
 
     private var blurRadius: CGFloat {
-        guard currentIndex != nil else { return 0 }
+        if isUserScrolling { return 0 }
         if isLineActive { return 0 }
+        guard !activeIndices.isEmpty else { return 0 }
         switch distance {
-        case 1: return 1.0
-        case 2: return 2.5
-        default: return 5.0
+        case 1: return 0.8
+        case 2: return 2.0
+        default: return 4.0
         }
     }
 
     private var opacity: Double {
-        guard currentIndex != nil else { return 1.0 }
+        if isUserScrolling {
+            return isLineActive ? 1.0 : 0.58
+        }
         if isLineActive { return 1.0 }
-        if let cur = currentIndex, index < cur {
-            return 0.35
+        guard let minActive = activeIndices.min() else { return 1.0 }
+        if index < minActive {
+            return distance == 1 ? 0.38 : 0.22
         }
         switch distance {
         case 1: return 0.55
         case 2: return 0.38
-        default: return 0.22
+        case 3: return 0.28
+        default: return 0.18
         }
     }
 
@@ -376,20 +392,26 @@ struct TTMLLyricsLineView: View {
     var body: some View {
         Group {
             if isDotMarker {
-                let nextT = nextLineTime ?? (line.time + 8.0)
-                ThreeDotsView(
-                    currentTime: currentTime,
-                    startTime: line.time,
-                    nextTime: nextT,
-                    isAgentV2: isV2
-                )
+                if isLineActive && !isUserScrolling {
+                    let nextT = nextLineTime ?? (line.time + 8.0)
+                    ThreeDotsView(
+                        currentTime: currentTime,
+                        startTime: line.time,
+                        nextTime: nextT,
+                        isAgentV2: isV2
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.85)))
+                } else {
+                    Color.clear.frame(height: 0)
+                }
             } else {
                 TTMLLineContentView(
                     line: line,
                     currentTime: currentTime,
                     isLineActive: isLineActive,
                     isV2: isV2,
-                    hasWordSync: hasWordSync
+                    hasWordSync: hasWordSync,
+                    isUserScrolling: isUserScrolling
                 )
                 .frame(maxWidth: .infinity, alignment: isV2 ? .trailing : .leading)
                 .padding(.leading, (hasMultiArtist && isV2) ? 44 : 0)
@@ -397,7 +419,8 @@ struct TTMLLyricsLineView: View {
                 .opacity(opacity)
                 .blur(radius: blurRadius)
                 .scaleEffect(scale, anchor: isV2 ? .trailing : .leading)
-                .animation(.easeInOut(duration: 0.3), value: currentIndex)
+                .animation(.easeInOut(duration: 0.3), value: isLineActive)
+                .animation(.easeInOut(duration: 0.25), value: isUserScrolling)
             }
         }
         .contentShape(Rectangle())
@@ -434,11 +457,13 @@ struct TTMLLyricsView: View {
                             TTMLLyricsLineView(
                                 line: line,
                                 index: index,
+                                activeIndices: viewModel.activeLineIndices,
                                 currentIndex: viewModel.currentLineIndex,
                                 currentTime: currentTime,
                                 nextLineTime: nextLineTime,
                                 hasMultiArtist: hasMultiArtist,
                                 hasWordSync: hasWordSync,
+                                isUserScrolling: viewModel.isUserScrolling,
                                 onSeek: {
                                     viewModel.userTapped(seconds: line.time)
                                 }

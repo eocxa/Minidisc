@@ -14,6 +14,7 @@ final class LyricsViewModel {
 
     private(set) var state: State = .loading
     private(set) var currentLineIndex: Int?
+    private(set) var activeLineIndices: Set<Int> = []
     private(set) var availableLanguages: [String] = []
     var selectedLanguage: String?
     var autoScrollEnabled: Bool = true
@@ -121,25 +122,77 @@ final class LyricsViewModel {
 
     // MARK: - Line tracking
 
+    private func getLineEndTime(line: NowLocalLyricLine, index: Int, lines: [NowLocalLyricLine]) -> Double {
+        let nextStart = (index + 1 < lines.count) ? lines[index + 1].time : Double.infinity
+        var maxWordEnd: Double = 0
+
+        if line.hasAdlib == true {
+            let mW = line.main?.words
+            let aW = line.adlib?.words
+            let mEnd = mW?.last?.endTime ?? ((mW?.last?.time).map { $0 + 0.8 } ?? 0)
+            let aEnd = aW?.last?.endTime ?? ((aW?.last?.time).map { $0 + 0.8 } ?? 0)
+            maxWordEnd = max(mEnd, aEnd)
+        } else if let last = line.words?.last {
+            maxWordEnd = last.endTime ?? (last.time + 0.8)
+        }
+
+        var sungEnd: Double = 0
+        if let e = line.endTime, e > line.time {
+            sungEnd = e
+        }
+        if maxWordEnd > sungEnd {
+            sungEnd = maxWordEnd
+        }
+
+        if sungEnd > line.time {
+            if index + 1 < lines.count {
+                return (sungEnd <= nextStart) ? nextStart : sungEnd
+            }
+            return sungEnd
+        }
+
+        let fallbackDuration = (index + 1 < lines.count) ? 2.0 : 3.5
+        return min(line.time + fallbackDuration, nextStart)
+    }
+
     func update(elapsedMs: Int) {
         if case .loadedTTML(let ttml) = state {
             let currentSec = Double(elapsedMs) / 1000.0
-            var newIndex: Int? = nil
+            var newIndices = Set<Int>()
+
             for (index, line) in ttml.lyrics.enumerated() {
-                let nextTime = (index + 1 < ttml.lyrics.count) ? ttml.lyrics[index + 1].time : (line.endTime ?? (line.time + 4.0))
-                if currentSec >= line.time && currentSec < nextTime {
-                    newIndex = index
+                if line.time <= currentSec {
+                    let lEnd = getLineEndTime(line: line, index: index, lines: ttml.lyrics)
+                    if currentSec < lEnd {
+                        newIndices.insert(index)
+                    }
+                } else {
                     break
                 }
             }
-            if newIndex != currentLineIndex {
-                currentLineIndex = newIndex
+
+            if newIndices.isEmpty {
+                var lastStarted = 0
+                for (index, line) in ttml.lyrics.enumerated() {
+                    if line.time <= currentSec {
+                        lastStarted = index
+                    } else {
+                        break
+                    }
+                }
+                newIndices.insert(lastStarted)
+            }
+
+            if newIndices != activeLineIndices {
+                activeLineIndices = newIndices
+                currentLineIndex = newIndices.min()
             }
             return
         }
 
         guard case .loaded(let structured) = state, structured.synced else {
             currentLineIndex = nil
+            activeLineIndices = []
             return
         }
         let adjustedMs = elapsedMs - structured.offset
@@ -154,12 +207,15 @@ final class LyricsViewModel {
         }
         if newIndex != currentLineIndex {
             currentLineIndex = newIndex
+            activeLineIndices = newIndex.map { Set([$0]) } ?? []
         }
     }
 
     // MARK: - Seek
 
     func userTapped(seconds: Double) {
+        resumeTask?.cancel()
+        isUserScrolling = false
         lastRecordedPosition = seconds
         lastPositionUpdateTime = Date()
         Task { [weak self] in

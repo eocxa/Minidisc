@@ -229,6 +229,7 @@ struct AlbumDetailView: View {
                     animatedTallURL: resolvedAnimatedTallURL
                 )
                 .padding(.top, resolvedAnimatedTallURL != nil ? 0 : MinidiscSpacing.xxl)
+                .zIndex(1)
 
                 AlbumMetadataSection(
                     albumName: viewModel?.albumName ?? initialName,
@@ -241,7 +242,8 @@ struct AlbumDetailView: View {
                     isLossless: enrichment?.isLossless ?? false,
                     isAtmos: enrichment?.isAtmos ?? false
                 )
-                .padding(.top, MinidiscSpacing.xl)
+                .padding(.top, resolvedAnimatedTallURL != nil ? -80 : MinidiscSpacing.xl)
+                .zIndex(2)
 
                 AlbumPlaybackActions(
                     albumId: albumId,
@@ -341,6 +343,7 @@ struct AlbumDetailView: View {
                 }
             }
         }
+        .ignoresSafeArea(edges: resolvedAnimatedTallURL != nil ? .top : [])
         .refreshable { await viewModel?.load() }
         .miniPlayerBottomMargin()
         .minidiscHideTopScrollEdgeEffect()
@@ -636,14 +639,13 @@ struct AlbumArtworkSection: View {
                     cornerRadius: 0
                 )
                 .aspectRatio(3 / 4, contentMode: .fill)
-                .frame(maxWidth: .infinity, maxHeight: 440)
+                .frame(maxWidth: .infinity, maxHeight: 480)
                 .clipped()
                 .mask(
                     LinearGradient(
                         stops: [
                             .init(color: .black, location: 0),
-                            .init(color: .black, location: 0.60),
-                            .init(color: .black.opacity(0.5), location: 0.80),
+                            .init(color: .black, location: 0.667),
                             .init(color: .clear, location: 1.0)
                         ],
                         startPoint: .top,

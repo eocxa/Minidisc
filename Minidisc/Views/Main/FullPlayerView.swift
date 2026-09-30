@@ -49,7 +49,7 @@ struct FullPlayerView: View {
 
     private var resolvedAnimatedCoverURL: URL? {
         guard !UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_disabled") else { return nil }
-        let path = currentTrackEnrichment?.animatedSquareUrl
+        let path = currentTrackEnrichment?.animatedTallUrl ?? currentTrackEnrichment?.animatedSquareUrl
         return NowLocalService.shared.resolveArtworkURL(
             path: path,
             activeServerBaseURL: container?.serverState.activeServer?.baseURL
@@ -298,8 +298,8 @@ struct FullPlayerView: View {
                             cornerRadius: 0,
                             isPaused: playerState.playbackState != .playing
                         )
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: geo.size.width, height: geo.size.width)
+                        .aspectRatio(3 / 4, contentMode: .fill)
+                        .frame(width: geo.size.width, height: geo.size.width * 4 / 3)
                         .clipped()
                         .mask(
                             LinearGradient(
@@ -334,7 +334,7 @@ struct FullPlayerView: View {
             }
             .matchedGeometryEffect(id: "playerArtwork", in: artworkNamespace ?? morphNS, isSource: isSource)
             .frame(width: isSource ? (isCanvas ? geo.size.width : artworkSide) : nil,
-                   height: isSource ? (isCanvas ? geo.size.width : artworkSide) : nil)
+                   height: isSource ? (isCanvas ? (geo.size.width * 4 / 3) : artworkSide) : nil)
             .shadow(
                 color: isCanvas ? .clear : (isSource ? Color.black.opacity(0.28) : Color.black.opacity(0.12)),
                 radius: isSource ? 18 : 6,
