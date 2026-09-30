@@ -448,12 +448,8 @@ struct TTMLLyricsView: View {
 
                         if let composer = lyricsResponse.composer, !composer.isEmpty {
                             VStack(alignment: .leading, spacing: 4) {
-                                (Text("Compositores: ")
-                                    .font(.system(size: 14, weight: .regular))
-                                    .foregroundStyle(Color.white.opacity(0.45))
-                                + Text(composer)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(Color.white.opacity(0.65)))
+                                Text("\(Text("Compositores: ").foregroundColor(.white.opacity(0.45))) \(Text(composer).foregroundColor(.white.opacity(0.65)).bold())")
+                                    .font(.system(size: 14))
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.top, 28)

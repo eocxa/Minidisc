@@ -31,7 +31,7 @@ public struct KaraokeRenderer: TextRenderer {
     /// Lets the glow and the bounce draw outside the typographic bounds
     /// without getting clipped.
     public var displayPadding: EdgeInsets {
-        EdgeInsets.zero
+        EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0)
     }
 
     public func draw(layout: Text.Layout, in context: inout GraphicsContext) {
