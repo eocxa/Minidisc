@@ -196,10 +196,13 @@ struct LyricsFlowLayout: Layout {
 private func karaokeConfig(isLineActive: Bool, dimOpacity: Double = 0.22, litColor: Color = .white) -> KaraokeConfiguration {
     var config = KaraokeConfiguration.standard
     config.litColor = litColor
+    config.glowStrength = 0.22
+    config.glowRadius = 1.5
+    config.bounceHeight = 0.0
+    config.bounceScale = 0.0
     if !isLineActive {
         config.dimColor = Color.white.opacity(dimOpacity)
         config.glowStrength = 0.0
-        config.bounceHeight = 0.0
     }
     return config
 }
@@ -210,7 +213,7 @@ struct TTMLWordSpanView: View {
     let word: NowLocalLyricWord
     let currentTime: Double
     let isLineActive: Bool
-    var font: Font = .system(size: 34, weight: .bold)
+    var font: Font = .system(size: 28, weight: .bold)
 
     var body: some View {
         let start = word.time
@@ -251,7 +254,7 @@ struct TTMLLineContentView: View {
                             word: w,
                             currentTime: currentTime,
                             isLineActive: isLineActive,
-                            font: .system(size: 34, weight: .bold)
+                            font: .system(size: 28, weight: .bold)
                         )
                     }
                 }
@@ -262,7 +265,7 @@ struct TTMLLineContentView: View {
                             word: w,
                             currentTime: currentTime,
                             isLineActive: isLineActive,
-                            font: .system(size: 34, weight: .bold)
+                            font: .system(size: 28, weight: .bold)
                         )
                     }
                 }
@@ -271,7 +274,7 @@ struct TTMLLineContentView: View {
                 let end = line.endTime ?? (line.time + 3.5)
 
                 Text(line.main?.text ?? line.text)
-                    .font(.system(size: 34, weight: .bold))
+                    .font(.system(size: 28, weight: .bold))
                     .karaoke(
                         time: currentTime,
                         start: start,
@@ -290,7 +293,7 @@ struct TTMLLineContentView: View {
                                 word: w,
                                 currentTime: currentTime,
                                 isLineActive: isLineActive,
-                                font: .system(size: 24, weight: .bold)
+                                font: .system(size: 21, weight: .bold)
                             )
                         }
                     }
@@ -301,7 +304,7 @@ struct TTMLLineContentView: View {
                     let end = adlib.endTime ?? (start + 3.0)
 
                     Text(adlibText)
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.system(size: 21, weight: .bold))
                         .karaoke(
                             time: currentTime,
                             start: start,

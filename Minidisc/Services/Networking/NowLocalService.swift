@@ -288,35 +288,48 @@ actor NowLocalService {
     }
 
     func fetchLyrics(pathOrTrackId: String, activeServerBaseURL: String?) async -> NowLocalLyricsResponse? {
-        guard let base = resolveServerBaseURL(activeServerBaseURL: activeServerBaseURL) else { return nil }
-
         if let cached = lyricsCache[pathOrTrackId] {
             return cached
         }
 
-        let fullURL: URL?
-        if pathOrTrackId.hasPrefix("http://") || pathOrTrackId.hasPrefix("https://") {
-            fullURL = URL(string: pathOrTrackId)
-        } else if pathOrTrackId.hasPrefix("/api/lyrics/") {
-            fullURL = URL(string: pathOrTrackId, relativeTo: base)?.absoluteURL
-        } else {
-            fullURL = URL(string: "/api/lyrics/\(pathOrTrackId)", relativeTo: base)?.absoluteURL
+        if pathOrTrackId.hasPrefix("http://") || pathOrTrackId.hasPrefix("https://"),
+           let fullURL = URL(string: pathOrTrackId) {
+            return await performLyricsFetch(url: fullURL, cacheKey: pathOrTrackId)
         }
 
-        guard let requestURL = fullURL else { return nil }
+        let candidates = resolveCandidateBaseURLs(activeServerBaseURL: activeServerBaseURL)
+        guard !candidates.isEmpty else { return nil }
 
+        for base in candidates {
+            let fullURL: URL?
+            if pathOrTrackId.hasPrefix("/api/lyrics/") {
+                fullURL = URL(string: pathOrTrackId, relativeTo: base)?.absoluteURL
+            } else {
+                let sanitized = pathOrTrackId.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                fullURL = URL(string: "/api/lyrics/\(sanitized)", relativeTo: base)?.absoluteURL
+            }
+
+            guard let requestURL = fullURL else { continue }
+            if let result = await performLyricsFetch(url: requestURL, cacheKey: pathOrTrackId) {
+                return result
+            }
+        }
+        return nil
+    }
+
+    private func performLyricsFetch(url: URL, cacheKey: String) async -> NowLocalLyricsResponse? {
         do {
-            var request = URLRequest(url: requestURL)
+            var request = URLRequest(url: url)
             request.timeoutInterval = 5.0
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
             let decoder = JSONDecoder()
             let lyricsResponse = try decoder.decode(NowLocalLyricsResponse.self, from: data)
-            lyricsCache[pathOrTrackId] = lyricsResponse
+            lyricsCache[cacheKey] = lyricsResponse
             return lyricsResponse
         } catch {
-            logger.debug("Lyrics lookup failed for \(pathOrTrackId): \(error.localizedDescription)")
+            logger.debug("Lyrics lookup failed for \(url): \(error.localizedDescription)")
+            return nil
         }
-        return nil
     }
 }

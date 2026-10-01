@@ -7,6 +7,7 @@ struct MotionArtworkView: View {
     let fallbackImage: PlatformImage?
     var cornerRadius: CGFloat = MinidiscCornerRadius.large
     var isPaused: Bool = false
+    var aspectRatio: CGFloat? = 1
 
     @State private var isVideoReady = false
 
@@ -15,16 +16,34 @@ struct MotionArtworkView: View {
         fallbackId: String,
         fallbackImage: PlatformImage? = nil,
         cornerRadius: CGFloat = MinidiscCornerRadius.large,
-        isPaused: Bool = false
+        isPaused: Bool = false,
+        aspectRatio: CGFloat? = 1
     ) {
         self.videoURL = videoURL
         self.fallbackId = fallbackId
         self.fallbackImage = fallbackImage
         self.cornerRadius = cornerRadius
         self.isPaused = isPaused
+        self.aspectRatio = aspectRatio
     }
 
     var body: some View {
+        Group {
+            if let aspectRatio {
+                content
+                    .aspectRatio(aspectRatio, contentMode: .fit)
+            } else {
+                content
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .onChange(of: videoURL) { _, _ in
+            isVideoReady = false
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         ZStack {
             // Capa estática base de la portada (siempre presente para transición suave y mientras carga el video)
             CoverArtView(
@@ -34,24 +53,17 @@ struct MotionArtworkView: View {
                 cornerRadius: cornerRadius,
                 initialImage: fallbackImage
             )
-            .aspectRatio(1, contentMode: .fit)
 
             // Capa de video animado en bucle si existe URL
             if let videoURL {
                 LoopingVideoPlayerRepresentable(videoURL: videoURL, isPaused: isPaused, onReady: {
-                    withAnimation(.easeInOut(duration: 0.35)) {
+                    withAnimation(.easeInOut(duration: 0.3)) {
                         isVideoReady = true
                     }
                 })
                 .id(videoURL)
-                .aspectRatio(1, contentMode: .fill)
                 .opacity(isVideoReady ? 1.0 : 0.0)
             }
-        }
-        .aspectRatio(1, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .onChange(of: videoURL) { _, _ in
-            isVideoReady = false
         }
     }
 }
@@ -132,10 +144,11 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
             let asset = AVURLAsset(url: url)
             let item = AVPlayerItem(asset: asset)
 
-            let qPlayer = AVQueuePlayer(playerItem: item)
+            let qPlayer = AVQueuePlayer()
             qPlayer.isMuted = true
             qPlayer.volume = 0.0
             qPlayer.preventsDisplaySleepDuringVideoPlayback = false
+            qPlayer.actionAtItemEnd = .none
 
             self.looper = AVPlayerLooper(player: qPlayer, templateItem: item)
             self.player = qPlayer
@@ -146,6 +159,9 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
                 if item.status == .readyToPlay {
                     DispatchQueue.main.async {
                         self?.onReady()
+                        if self?.isUserPaused == false {
+                            self?.player?.play()
+                        }
                     }
                 }
             }
@@ -192,6 +208,11 @@ private class PlayerContainerUIView: UIView {
         layer.masksToBounds = true
         playerLayer.masksToBounds = true
         playerLayer.videoGravity = .resizeAspectFill
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        playerLayer.frame = bounds
     }
 
     required init?(coder: NSCoder) {

@@ -291,21 +291,22 @@ struct FullPlayerView: View {
             Group {
                 if let animatedURL = resolvedAnimatedCoverURL {
                     if isCanvas {
+                        let tallHeight = geo.size.width * 4.0 / 3.0
                         MotionArtworkView(
                             videoURL: animatedURL,
                             fallbackId: coverArtId,
                             fallbackImage: initialArtwork?.id == coverArtId ? initialArtwork?.image : nil,
                             cornerRadius: 0,
-                            isPaused: playerState.playbackState != .playing
+                            isPaused: playerState.playbackState != .playing,
+                            aspectRatio: nil
                         )
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: geo.size.width, height: geo.size.height)
+                        .frame(width: geo.size.width, height: tallHeight)
                         .clipped()
                         .mask(
                             LinearGradient(
                                 stops: [
                                     .init(color: .black, location: 0),
-                                    .init(color: .black, location: 0.65),
+                                    .init(color: .black, location: 2.0 / 3.0),
                                     .init(color: .clear, location: 1.0)
                                 ],
                                 startPoint: .top,
@@ -334,7 +335,7 @@ struct FullPlayerView: View {
             }
             .matchedGeometryEffect(id: "playerArtwork", in: artworkNamespace ?? morphNS, isSource: isSource)
             .frame(width: isSource ? (isCanvas ? geo.size.width : artworkSide) : nil,
-                   height: isSource ? (isCanvas ? geo.size.height : artworkSide) : nil)
+                   height: isSource ? (isCanvas ? (geo.size.width * 4.0 / 3.0) : artworkSide) : nil)
             .shadow(
                 color: isCanvas ? .clear : (isSource ? Color.black.opacity(0.28) : Color.black.opacity(0.12)),
                 radius: isSource ? 18 : 6,
