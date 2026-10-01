@@ -58,7 +58,7 @@ struct LyricsView: View {
             .scrollIndicators(.hidden)
             .onAppear {
                 if let currentIndex = viewModel.currentLineIndex {
-                    let anchor: UnitPoint = (currentIndex == 0) ? .top : UnitPoint(x: 0.5, y: 0.11)
+                    let anchor = UnitPoint(x: 0.5, y: 0.16)
                     proxy.scrollTo(currentIndex, anchor: anchor)
                 }
             }
@@ -67,7 +67,7 @@ struct LyricsView: View {
                       !viewModel.isUserScrolling,
                       let newIndex else { return }
                 withAnimation(.easeInOut(duration: 0.3)) {
-                    let anchor: UnitPoint = (newIndex == 0) ? .top : UnitPoint(x: 0.5, y: 0.11)
+                    let anchor = UnitPoint(x: 0.5, y: 0.16)
                     proxy.scrollTo(newIndex, anchor: anchor)
                 }
             }

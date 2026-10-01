@@ -46,6 +46,9 @@ struct FullPlayerView: View {
     @State private var trackSwipe = TrackSwipeInteraction()
     @State private var currentTrackEnrichment: NowLocalEnrichment?
     @State private var isMotionArtworkReady = false
+    @State private var areLyricsControlsHidden = false
+    @State private var lyricsInactivityTask: Task<Void, Never>?
+    @State private var lastActivityTime: Date = Date()
     @Namespace private var morphNS
 
     private var resolvedAnimatedCoverURL: URL? {
@@ -184,6 +187,36 @@ struct FullPlayerView: View {
             ))
             .environment(\.colorScheme, .dark)
             .environment(\.minidiscPlayingAccent, MinidiscColors.accent)
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    userDidInteract()
+                }
+            )
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 2).onChanged { _ in
+                    userDidInteract()
+                }
+            )
+            .onChange(of: showLyrics) { _, isShowing in
+                if isShowing {
+                    areLyricsControlsHidden = false
+                    startInactivityTimer()
+                } else {
+                    lyricsInactivityTask?.cancel()
+                    areLyricsControlsHidden = false
+                }
+            }
+            .onChange(of: surface) { _, newSurface in
+                if newSurface == .queue {
+                    lyricsInactivityTask?.cancel()
+                    areLyricsControlsHidden = false
+                }
+            }
+            .onChange(of: playerState.currentTrack?.id) { _, _ in
+                if showLyrics {
+                    userDidInteract()
+                }
+            }
         .background {
             FullPlayerBackground(colors: colors)
         }
@@ -230,53 +263,64 @@ struct FullPlayerView: View {
                     .padding(.horizontal, Self.playerHorizontalPadding)
                 }
 
-                if !playerState.isLiveStream {
-                    ScrubberView(
-                        playerState: playerState,
-                        playerService: container?.playerService,
-                        contentColor: vm.contentColor,
-                        secondaryContentColor: vm.secondaryContentColor,
-                        isLossless: currentTrackEnrichment?.isLossless ?? false,
-                        isAtmos: currentTrackEnrichment?.isAtmos ?? false
-                    )
-                    .padding(.horizontal, Self.playerHorizontalPadding)
-                    .padding(.top, MinidiscSpacing.m)
-                    .disabled(!playerState.isPlaybackAvailable)
-                    .opacity(playerState.isPlaybackAvailable ? 1.0 : 0.4)
-                }
+                if !showLyrics || !areLyricsControlsHidden {
+                    VStack(spacing: 0) {
+                        if !playerState.isLiveStream {
+                            ScrubberView(
+                                playerState: playerState,
+                                playerService: container?.playerService,
+                                contentColor: vm.contentColor,
+                                secondaryContentColor: vm.secondaryContentColor,
+                                isLossless: currentTrackEnrichment?.isLossless ?? false,
+                                isAtmos: currentTrackEnrichment?.isAtmos ?? false
+                            )
+                            .padding(.horizontal, Self.playerHorizontalPadding)
+                            .padding(.top, MinidiscSpacing.m)
+                            .disabled(!playerState.isPlaybackAvailable)
+                            .opacity(playerState.isPlaybackAvailable ? 1.0 : 0.4)
+                        }
 
-                PlaybackControlsView(
-                    playerState: playerState,
-                    playerService: container?.playerService,
-                    isPlaybackAvailable: playerState.isPlaybackAvailable,
-                    keepsPauseIcon: trackSwipe.keepsPauseIcon,
-                    contentColor: vm.contentColor
-                )
-                .padding(.top, Self.playerControlsSpacing)
-
-                if dynamicTypeSize < .accessibility1 {
-                    VolumeSection(contentColor: vm.contentColor, secondaryContentColor: vm.secondaryContentColor)
-                        .padding(.horizontal, Self.playerHorizontalPadding)
+                        PlaybackControlsView(
+                            playerState: playerState,
+                            playerService: container?.playerService,
+                            isPlaybackAvailable: playerState.isPlaybackAvailable,
+                            keepsPauseIcon: trackSwipe.keepsPauseIcon,
+                            contentColor: vm.contentColor
+                        )
                         .padding(.top, Self.playerControlsSpacing)
-                }
 
-                flowGap(isCompact ? 24 : 40)
+                        if dynamicTypeSize < .accessibility1 {
+                            VolumeSection(contentColor: vm.contentColor, secondaryContentColor: vm.secondaryContentColor)
+                                .padding(.horizontal, Self.playerHorizontalPadding)
+                                .padding(.top, Self.playerControlsSpacing)
+                        }
+
+                        flowGap(isCompact ? 24 : 40)
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                } else if showLyrics && areLyricsControlsHidden {
+                    flowGap(16)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .animation(.spring(response: 0.45, dampingFraction: 0.82), value: showLyrics)
             .animation(.spring(response: 0.45, dampingFraction: 0.82), value: surface)
+            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: areLyricsControlsHidden)
             .animation(.easeInOut(duration: 0.4), value: hasMotionCanvas)
 
-            BottomToolbar(
-                showLyrics: $showLyrics,
-                surface: $surface,
-                isLiveStream: playerState.isLiveStream,
-                secondaryContentColor: vm.secondaryContentColor,
-                accentColor: MinidiscColors.accent,
-                playerState: playerState
-            )
-            .padding(.top, MinidiscSpacing.s)
-            .padding(.bottom, MinidiscSpacing.l)
+            if !showLyrics || !areLyricsControlsHidden {
+                BottomToolbar(
+                    showLyrics: $showLyrics,
+                    surface: $surface,
+                    isLiveStream: playerState.isLiveStream,
+                    secondaryContentColor: vm.secondaryContentColor,
+                    accentColor: MinidiscColors.accent,
+                    playerState: playerState
+                )
+                .padding(.top, MinidiscSpacing.s)
+                .padding(.bottom, MinidiscSpacing.l)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
         }
         .overlay(alignment: .top) {
             topBar
@@ -447,6 +491,38 @@ struct FullPlayerView: View {
             .environment(\.colorScheme, .dark)
             .frame(maxWidth: .infinity, minHeight: 120, maxHeight: .infinity)
 
+        }
+    }
+
+    // MARK: - Lyrics Inactivity Timer
+
+    private func userDidInteract() {
+        guard showLyrics else {
+            if areLyricsControlsHidden { areLyricsControlsHidden = false }
+            lyricsInactivityTask?.cancel()
+            return
+        }
+        let now = Date()
+        if areLyricsControlsHidden {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                areLyricsControlsHidden = false
+            }
+        }
+        if now.timeIntervalSince(lastActivityTime) > 0.4 || lyricsInactivityTask == nil {
+            lastActivityTime = now
+            startInactivityTimer()
+        }
+    }
+
+    private func startInactivityTimer() {
+        lyricsInactivityTask?.cancel()
+        guard showLyrics else { return }
+        lyricsInactivityTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            guard !Task.isCancelled, showLyrics else { return }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
+                areLyricsControlsHidden = true
+            }
         }
     }
 
@@ -940,7 +1016,7 @@ struct ProgressSlider: View {
     var trackColor: Color = Color.white.opacity(0.2)
     var fillColor: Color = Color.white.opacity(0.95)
     var height: CGFloat = 32
-    var trackHeight: CGFloat = 5
+    var trackHeight: CGFloat = 8
     var isInteracting: Bool = false
 
     @State private var isDragging = false
@@ -959,7 +1035,7 @@ struct ProgressSlider: View {
                     .frame(width: progressWidth(in: trackW))
                     .animation(nil, value: value)
             }
-            .frame(height: isDragging ? 12 : trackHeight)
+            .frame(height: isDragging ? 14 : trackHeight)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
             .frame(maxHeight: .infinity)
             .contentShape(Rectangle())

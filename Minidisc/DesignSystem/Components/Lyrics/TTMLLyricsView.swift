@@ -118,7 +118,7 @@ struct ThreeDotsView: View {
                 .opacity(physics.a3)
                 .shadow(color: .white.opacity(physics.a3 * 0.45), radius: 3)
         }
-        .frame(height: 24)
+        .frame(height: 42)
         .scaleEffect(physics.rowScale, anchor: isAgentV2 ? .trailing : .leading)
         .opacity(physics.rowOpacity)
         .frame(maxWidth: .infinity, alignment: isAgentV2 ? .trailing : .leading)
@@ -491,7 +491,7 @@ struct TTMLLyricsView: View {
                 .scrollIndicators(.hidden)
                 .onAppear {
                     if let currentIndex = viewModel.currentLineIndex {
-                        let anchor: UnitPoint = (currentIndex == 0) ? .top : UnitPoint(x: 0.5, y: 0.11)
+                        let anchor = UnitPoint(x: 0.5, y: 0.16)
                         proxy.scrollTo(currentIndex, anchor: anchor)
                     }
                 }
@@ -500,7 +500,7 @@ struct TTMLLyricsView: View {
                           !viewModel.isUserScrolling,
                           let newIndex else { return }
                     withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
-                        let anchor: UnitPoint = (newIndex == 0) ? .top : UnitPoint(x: 0.5, y: 0.11)
+                        let anchor = UnitPoint(x: 0.5, y: 0.16)
                         proxy.scrollTo(newIndex, anchor: anchor)
                     }
                 }
