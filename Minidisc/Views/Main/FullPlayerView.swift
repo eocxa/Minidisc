@@ -187,16 +187,6 @@ struct FullPlayerView: View {
             ))
             .environment(\.colorScheme, .dark)
             .environment(\.minidiscPlayingAccent, MinidiscColors.accent)
-            .simultaneousGesture(
-                TapGesture().onEnded {
-                    userDidInteract()
-                }
-            )
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 2).onChanged { _ in
-                    userDidInteract()
-                }
-            )
             .onChange(of: showLyrics) { _, isShowing in
                 if isShowing {
                     areLyricsControlsHidden = false
@@ -217,8 +207,22 @@ struct FullPlayerView: View {
                     userDidInteract()
                 }
             }
+            .onChange(of: lyricsViewModel?.isUserScrolling) { _, isScrolling in
+                if isScrolling == true {
+                    userDidInteract()
+                }
+            }
+            .onChange(of: lyricsViewModel?.currentLineIndex) { _, _ in
+                if showLyrics {
+                    userDidInteract()
+                }
+            }
         .background {
             FullPlayerBackground(colors: colors)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    userDidInteract()
+                }
         }
     }
 

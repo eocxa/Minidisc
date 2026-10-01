@@ -61,6 +61,7 @@ nonisolated struct NowLocalLyricLine: Sendable, Codable, Identifiable, Hashable 
     let hasAdlib: Bool?
     let main: NowLocalLyricSubPart?
     let adlib: NowLocalLyricSubPart?
+    let adlibIsBefore: Bool?
 
     enum CodingKeys: String, CodingKey {
         case time
@@ -71,6 +72,7 @@ nonisolated struct NowLocalLyricLine: Sendable, Codable, Identifiable, Hashable 
         case hasAdlib = "has_adlib"
         case main
         case adlib
+        case adlibIsBefore = "adlib_is_before"
     }
 }
 

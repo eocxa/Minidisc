@@ -243,80 +243,76 @@ struct TTMLLineContentView: View {
         isV2 ? .trailing : .leading
     }
 
+    private var isAdlibBefore: Bool {
+        line.adlibIsBefore ?? (line.adlib != nil && (line.adlib?.time ?? .infinity) < (line.main?.time ?? line.time))
+    }
+
+    @ViewBuilder
+    private var mainVocalsView: some View {
+        if let mainWords = line.main?.words, !mainWords.isEmpty, hasWordSync {
+            LyricsFlowLayout(horizontalAlignment: alignment) {
+                ForEach(Array(mainWords.enumerated()), id: \.offset) { _, w in
+                    TTMLWordSpanView(
+                        word: w,
+                        currentTime: currentTime,
+                        isLineActive: isLineActive,
+                        font: .system(size: 34, weight: .bold)
+                    )
+                }
+            }
+        } else if let words = line.words, !words.isEmpty, hasWordSync {
+            LyricsFlowLayout(horizontalAlignment: alignment) {
+                ForEach(Array(words.enumerated()), id: \.offset) { _, w in
+                    TTMLWordSpanView(
+                        word: w,
+                        currentTime: currentTime,
+                        isLineActive: isLineActive,
+                        font: .system(size: 34, weight: .bold)
+                    )
+                }
+            }
+        } else {
+            Text(line.main?.text ?? line.text)
+                .font(.system(size: 34, weight: .bold))
+                .foregroundStyle(isLineActive ? Color.white : Color.white.opacity(0.22))
+                .multilineTextAlignment(isV2 ? .trailing : .leading)
+        }
+    }
+
+    @ViewBuilder
+    private var adlibsView: some View {
+        if line.hasAdlib == true, let adlib = line.adlib, isLineActive && !isUserScrolling {
+            if let adlibWords = adlib.words, !adlibWords.isEmpty, hasWordSync {
+                LyricsFlowLayout(horizontalAlignment: alignment) {
+                    ForEach(Array(adlibWords.enumerated()), id: \.offset) { _, w in
+                        TTMLWordSpanView(
+                            word: w,
+                            currentTime: currentTime,
+                            isLineActive: isLineActive,
+                            font: .system(size: 20, weight: .bold)
+                        )
+                    }
+                }
+                .opacity(0.85)
+                .transition(.opacity.combined(with: .offset(y: isAdlibBefore ? -4 : 4)))
+            } else if let adlibText = adlib.text, !adlibText.isEmpty {
+                Text(adlibText)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(isLineActive ? Color.white.opacity(0.85) : Color.white.opacity(0.18))
+                    .multilineTextAlignment(isV2 ? .trailing : .leading)
+                    .transition(.opacity.combined(with: .offset(y: isAdlibBefore ? -4 : 4)))
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: alignment, spacing: 4) {
-            // Main vocals
-            if let mainWords = line.main?.words, !mainWords.isEmpty, hasWordSync {
-                LyricsFlowLayout(horizontalAlignment: alignment) {
-                    ForEach(Array(mainWords.enumerated()), id: \.offset) { _, w in
-                        TTMLWordSpanView(
-                            word: w,
-                            currentTime: currentTime,
-                            isLineActive: isLineActive,
-                            font: .system(size: 34, weight: .bold)
-                        )
-                    }
-                }
-            } else if let words = line.words, !words.isEmpty, hasWordSync {
-                LyricsFlowLayout(horizontalAlignment: alignment) {
-                    ForEach(Array(words.enumerated()), id: \.offset) { _, w in
-                        TTMLWordSpanView(
-                            word: w,
-                            currentTime: currentTime,
-                            isLineActive: isLineActive,
-                            font: .system(size: 34, weight: .bold)
-                        )
-                    }
-                }
+            if isAdlibBefore {
+                adlibsView
+                mainVocalsView
             } else {
-                let start = line.time
-                let end = line.endTime ?? (line.time + 3.5)
-
-                Text(line.main?.text ?? line.text)
-                    .font(.system(size: 34, weight: .bold))
-                    .karaoke(
-                        time: currentTime,
-                        start: start,
-                        end: end,
-                        configuration: karaokeConfig(isLineActive: isLineActive)
-                    )
-                    .multilineTextAlignment(isV2 ? .trailing : .leading)
-            }
-
-            // Adlibs vocals (if present) - only emerge when line is active and not user-scrolling
-            if line.hasAdlib == true, let adlib = line.adlib, isLineActive && !isUserScrolling {
-                if let adlibWords = adlib.words, !adlibWords.isEmpty, hasWordSync {
-                    LyricsFlowLayout(horizontalAlignment: alignment) {
-                        ForEach(Array(adlibWords.enumerated()), id: \.offset) { _, w in
-                            TTMLWordSpanView(
-                                word: w,
-                                currentTime: currentTime,
-                                isLineActive: isLineActive,
-                                font: .system(size: 20, weight: .bold)
-                            )
-                        }
-                    }
-                    .opacity(0.85)
-                    .transition(.opacity.combined(with: .offset(y: 4)))
-                } else if let adlibText = adlib.text, !adlibText.isEmpty {
-                    let start = adlib.time ?? line.time
-                    let end = adlib.endTime ?? (start + 3.0)
-
-                    Text(adlibText)
-                        .font(.system(size: 20, weight: .bold))
-                        .karaoke(
-                            time: currentTime,
-                            start: start,
-                            end: end,
-                            configuration: karaokeConfig(
-                                isLineActive: isLineActive,
-                                dimOpacity: 0.18,
-                                litColor: Color.white.opacity(0.85)
-                            )
-                        )
-                        .multilineTextAlignment(isV2 ? .trailing : .leading)
-                        .transition(.opacity.combined(with: .offset(y: 4)))
-                }
+                mainVocalsView
+                adlibsView
             }
         }
     }
@@ -455,23 +451,28 @@ struct TTMLLyricsView: View {
                 ScrollView {
                     LazyVStack(spacing: 30) {
                         ForEach(Array(lyricsResponse.lyrics.enumerated()), id: \.offset) { index, line in
-                            let nextLineTime = (index + 1 < lyricsResponse.lyrics.count) ? lyricsResponse.lyrics[index + 1].time : nil
+                            let isDot = (line.text == "…" || line.text == "...")
+                            let isActive = viewModel.activeLineIndices.contains(index)
 
-                            TTMLLyricsLineView(
-                                line: line,
-                                index: index,
-                                activeIndices: viewModel.activeLineIndices,
-                                currentIndex: viewModel.currentLineIndex,
-                                currentTime: currentTime,
-                                nextLineTime: nextLineTime,
-                                hasMultiArtist: hasMultiArtist,
-                                hasWordSync: hasWordSync,
-                                isUserScrolling: viewModel.isUserScrolling,
-                                onSeek: {
-                                    viewModel.userTapped(seconds: line.time)
-                                }
-                            )
-                            .id(index)
+                            if !isDot || (isActive && !viewModel.isUserScrolling) {
+                                let nextLineTime = (index + 1 < lyricsResponse.lyrics.count) ? lyricsResponse.lyrics[index + 1].time : nil
+
+                                TTMLLyricsLineView(
+                                    line: line,
+                                    index: index,
+                                    activeIndices: viewModel.activeLineIndices,
+                                    currentIndex: viewModel.currentLineIndex,
+                                    currentTime: currentTime,
+                                    nextLineTime: nextLineTime,
+                                    hasMultiArtist: hasMultiArtist,
+                                    hasWordSync: hasWordSync,
+                                    isUserScrolling: viewModel.isUserScrolling,
+                                    onSeek: {
+                                        viewModel.userTapped(seconds: line.time)
+                                    }
+                                )
+                                .id(index)
+                            }
                         }
 
                         if let composer = lyricsResponse.composer, !composer.isEmpty {
@@ -485,13 +486,13 @@ struct TTMLLyricsView: View {
                         }
                     }
                     .padding(.horizontal, MinidiscSpacing.l)
-                    .padding(.top, 12)
+                    .padding(.top, 56)
                     .padding(.bottom, 220)
                 }
                 .scrollIndicators(.hidden)
                 .onAppear {
                     if let currentIndex = viewModel.currentLineIndex {
-                        let anchor = UnitPoint(x: 0.5, y: 0.16)
+                        let anchor = UnitPoint(x: 0.5, y: 0.11)
                         proxy.scrollTo(currentIndex, anchor: anchor)
                     }
                 }
@@ -500,7 +501,7 @@ struct TTMLLyricsView: View {
                           !viewModel.isUserScrolling,
                           let newIndex else { return }
                     withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
-                        let anchor = UnitPoint(x: 0.5, y: 0.16)
+                        let anchor = UnitPoint(x: 0.5, y: 0.11)
                         proxy.scrollTo(newIndex, anchor: anchor)
                     }
                 }
