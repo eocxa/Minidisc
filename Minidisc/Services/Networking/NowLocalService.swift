@@ -90,7 +90,6 @@ nonisolated struct NowLocalLyricsResponse: Sendable, Codable, Equatable {
 
 actor NowLocalService {
     static let shared = NowLocalService()
-    nonisolated(unsafe) static var lastVerifiedBaseURL: URL? = nil
     private var cache: [String: NowLocalEnrichment] = [:]
     private var lyricsCache: [String: NowLocalLyricsResponse] = [:]
     private let logger = Logger(subsystem: "app.minidisc.nowlocal", category: "Enrichment")
@@ -101,9 +100,6 @@ actor NowLocalService {
            !custom.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
            let customURL = URL(string: custom) {
             urls.append(customURL)
-        }
-        if let verified = NowLocalService.lastVerifiedBaseURL, !urls.contains(verified) {
-            urls.append(verified)
         }
         if let active = activeServerBaseURL, let parsed = URL(string: active) {
             if let host = parsed.host {
@@ -182,7 +178,6 @@ actor NowLocalService {
             let enrichment = try decoder.decode(NowLocalEnrichment.self, from: data)
             if enrichment.found {
                 cache[cacheKey] = enrichment
-                NowLocalService.lastVerifiedBaseURL = base
                 return enrichment
             }
         } catch {
@@ -228,8 +223,6 @@ actor NowLocalService {
             let tall = track["animated_tall_url"] as? String
             let square = track["animated_square_url"] as? String
             guard tall != nil || square != nil else { return nil }
-
-            NowLocalService.lastVerifiedBaseURL = base
 
             return NowLocalEnrichment(
                 found: true,

@@ -101,7 +101,6 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
         private var looper: AVPlayerLooper?
         private var isUserPaused = false
         private var readyObserver: NSKeyValueObservation?
-        private var endObserver: NSObjectProtocol?
         private let onReady: () -> Void
 
         init(onReady: @escaping () -> Void) {
@@ -123,10 +122,6 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
 
         func cleanup() {
             NotificationCenter.default.removeObserver(self)
-            if let endObserver {
-                NotificationCenter.default.removeObserver(endObserver)
-                self.endObserver = nil
-            }
             readyObserver?.invalidate()
             readyObserver = nil
             player?.pause()
@@ -137,10 +132,6 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
         func setup(url: URL, in view: PlayerContainerUIView) {
             currentURL = url
             readyObserver?.invalidate()
-            if let endObserver {
-                NotificationCenter.default.removeObserver(endObserver)
-                self.endObserver = nil
-            }
             player?.pause()
             player = nil
             looper = nil
@@ -161,34 +152,25 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
             view.playerLayer.player = qPlayer
             view.playerLayer.videoGravity = .resizeAspect
 
-            endObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                self?.player?.seek(to: .zero)
-                if self?.isUserPaused == false {
-                    self?.player?.playImmediately(atRate: 1.0)
-                }
-            }
-
             readyObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
-                DispatchQueue.main.async {
-                    self?.onReady()
-                    if self?.isUserPaused == false {
-                        self?.player?.playImmediately(atRate: 1.0)
+                if item.status == .readyToPlay {
+                    DispatchQueue.main.async {
+                        self?.onReady()
+                        if self?.isUserPaused == false {
+                            self?.player?.play()
+                        }
                     }
                 }
             }
 
             if !isUserPaused {
-                qPlayer.playImmediately(atRate: 1.0)
+                qPlayer.play()
             }
         }
 
         func play() {
             isUserPaused = false
-            player?.playImmediately(atRate: 1.0)
+            player?.play()
         }
 
         func pause() {
@@ -202,7 +184,7 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
 
         @objc private func handleForeground() {
             if !isUserPaused {
-                player?.playImmediately(atRate: 1.0)
+                player?.play()
             }
         }
     }
