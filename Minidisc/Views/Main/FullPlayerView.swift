@@ -381,7 +381,7 @@ struct FullPlayerView: View {
             if let lyricsVM = lyricsViewModel {
                 LyricsView(viewModel: lyricsVM)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 0)
                     .mask(
                         LinearGradient(
                             stops: [

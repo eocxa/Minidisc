@@ -9,7 +9,7 @@ struct MotionArtworkView: View {
     var isPaused: Bool = false
     var aspectRatio: CGFloat? = 1
 
-    @State private var isVideoReady = false
+    @State private var isVideoReady = true
 
     init(
         videoURL: URL?,
@@ -37,9 +37,6 @@ struct MotionArtworkView: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .onChange(of: videoURL) { _, _ in
-            isVideoReady = false
-        }
     }
 
     @ViewBuilder
@@ -57,9 +54,7 @@ struct MotionArtworkView: View {
             // Capa de video animado en bucle si existe URL
             if let videoURL {
                 LoopingVideoPlayerRepresentable(videoURL: videoURL, isPaused: isPaused, onReady: {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        isVideoReady = true
-                    }
+                    isVideoReady = true
                 })
                 .id(videoURL)
                 .opacity(isVideoReady ? 1.0 : 0.0)
@@ -106,6 +101,7 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
         private var looper: AVPlayerLooper?
         private var isUserPaused = false
         private var readyObserver: NSKeyValueObservation?
+        private var endObserver: NSObjectProtocol?
         private let onReady: () -> Void
 
         init(onReady: @escaping () -> Void) {
@@ -127,6 +123,10 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
 
         func cleanup() {
             NotificationCenter.default.removeObserver(self)
+            if let endObserver {
+                NotificationCenter.default.removeObserver(endObserver)
+                self.endObserver = nil
+            }
             readyObserver?.invalidate()
             readyObserver = nil
             player?.pause()
@@ -137,43 +137,58 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
         func setup(url: URL, in view: PlayerContainerUIView) {
             currentURL = url
             readyObserver?.invalidate()
+            if let endObserver {
+                NotificationCenter.default.removeObserver(endObserver)
+                self.endObserver = nil
+            }
             player?.pause()
             player = nil
             looper = nil
 
             let asset = AVURLAsset(url: url)
             let item = AVPlayerItem(asset: asset)
+            item.audioTimePitchAlgorithm = .lowQualityZeroLatency
 
             let qPlayer = AVQueuePlayer()
             qPlayer.isMuted = true
             qPlayer.volume = 0.0
             qPlayer.preventsDisplaySleepDuringVideoPlayback = false
+            qPlayer.automaticallyWaitsToMinimizeStalling = false
             qPlayer.actionAtItemEnd = .none
 
             self.looper = AVPlayerLooper(player: qPlayer, templateItem: item)
             self.player = qPlayer
             view.playerLayer.player = qPlayer
-            view.playerLayer.videoGravity = .resizeAspectFill
+            view.playerLayer.videoGravity = .resizeAspect
+
+            endObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.player?.seek(to: .zero)
+                if self?.isUserPaused == false {
+                    self?.player?.playImmediately(atRate: 1.0)
+                }
+            }
 
             readyObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
-                if item.status == .readyToPlay {
-                    DispatchQueue.main.async {
-                        self?.onReady()
-                        if self?.isUserPaused == false {
-                            self?.player?.play()
-                        }
+                DispatchQueue.main.async {
+                    self?.onReady()
+                    if self?.isUserPaused == false {
+                        self?.player?.playImmediately(atRate: 1.0)
                     }
                 }
             }
 
             if !isUserPaused {
-                qPlayer.play()
+                qPlayer.playImmediately(atRate: 1.0)
             }
         }
 
         func play() {
             isUserPaused = false
-            player?.play()
+            player?.playImmediately(atRate: 1.0)
         }
 
         func pause() {
@@ -187,7 +202,7 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
 
         @objc private func handleForeground() {
             if !isUserPaused {
-                player?.play()
+                player?.playImmediately(atRate: 1.0)
             }
         }
     }
@@ -207,7 +222,7 @@ private class PlayerContainerUIView: UIView {
         clipsToBounds = true
         layer.masksToBounds = true
         playerLayer.masksToBounds = true
-        playerLayer.videoGravity = .resizeAspectFill
+        playerLayer.videoGravity = .resizeAspect
     }
 
     override func layoutSubviews() {

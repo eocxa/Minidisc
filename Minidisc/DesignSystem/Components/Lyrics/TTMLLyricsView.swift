@@ -213,7 +213,7 @@ struct TTMLWordSpanView: View {
     let word: NowLocalLyricWord
     let currentTime: Double
     let isLineActive: Bool
-    var font: Font = .system(size: 28, weight: .bold)
+    var font: Font = .system(size: 34, weight: .bold)
 
     var body: some View {
         let start = word.time
@@ -254,7 +254,7 @@ struct TTMLLineContentView: View {
                             word: w,
                             currentTime: currentTime,
                             isLineActive: isLineActive,
-                            font: .system(size: 28, weight: .bold)
+                            font: .system(size: 34, weight: .bold)
                         )
                     }
                 }
@@ -265,7 +265,7 @@ struct TTMLLineContentView: View {
                             word: w,
                             currentTime: currentTime,
                             isLineActive: isLineActive,
-                            font: .system(size: 28, weight: .bold)
+                            font: .system(size: 34, weight: .bold)
                         )
                     }
                 }
@@ -274,7 +274,7 @@ struct TTMLLineContentView: View {
                 let end = line.endTime ?? (line.time + 3.5)
 
                 Text(line.main?.text ?? line.text)
-                    .font(.system(size: 28, weight: .bold))
+                    .font(.system(size: 34, weight: .bold))
                     .karaoke(
                         time: currentTime,
                         start: start,
@@ -293,7 +293,7 @@ struct TTMLLineContentView: View {
                                 word: w,
                                 currentTime: currentTime,
                                 isLineActive: isLineActive,
-                                font: .system(size: 21, weight: .bold)
+                                font: .system(size: 24, weight: .bold)
                             )
                         }
                     }
@@ -304,7 +304,7 @@ struct TTMLLineContentView: View {
                     let end = adlib.endTime ?? (start + 3.0)
 
                     Text(adlibText)
-                        .font(.system(size: 21, weight: .bold))
+                        .font(.system(size: 24, weight: .bold))
                         .karaoke(
                             time: currentTime,
                             start: start,
@@ -418,8 +418,8 @@ struct TTMLLyricsLineView: View {
                     isUserScrolling: isUserScrolling
                 )
                 .frame(maxWidth: .infinity, alignment: isV2 ? .trailing : .leading)
-                .padding(.leading, (hasMultiArtist && isV2) ? 44 : 0)
-                .padding(.trailing, (hasMultiArtist && !isV2) ? 44 : 0)
+                .padding(.leading, (hasMultiArtist && isV2) ? 24 : 0)
+                .padding(.trailing, (hasMultiArtist && !isV2) ? 24 : 0)
                 .opacity(opacity)
                 .blur(radius: blurRadius)
                 .scaleEffect(scale, anchor: isV2 ? .trailing : .leading)
@@ -485,7 +485,7 @@ struct TTMLLyricsView: View {
                             .padding(.bottom, 40)
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 8)
                     .padding(.top, 36)
                     .padding(.bottom, 220)
                 }
