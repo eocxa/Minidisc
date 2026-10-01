@@ -49,6 +49,7 @@ struct FullPlayerView: View {
 
     private var resolvedAnimatedCoverURL: URL? {
         guard !UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_disabled") else { return nil }
+        guard !showLyrics else { return nil }
         let path = currentTrackEnrichment?.animatedTallUrl ?? currentTrackEnrichment?.animatedSquareUrl
         return NowLocalService.shared.resolveArtworkURL(
             path: path,
@@ -196,7 +197,7 @@ struct FullPlayerView: View {
 
         VStack(spacing: 0) {
             VStack(spacing: 0) {
-                flowGap(isCompact ? 52 : (hasMotionCanvas ? 0 : 20))
+                flowGap(isCompact ? 72 : (hasMotionCanvas ? 0 : 40))
 
                 ZStack {
                     if showLyrics {
@@ -251,10 +252,10 @@ struct FullPlayerView: View {
                 )
                 .padding(.top, isCompact ? MinidiscSpacing.m : Self.playerControlsSpacing)
 
-                if !isCompact && dynamicTypeSize < .accessibility1 {
+                if dynamicTypeSize < .accessibility1 {
                     VolumeSection(contentColor: vm.contentColor, secondaryContentColor: vm.secondaryContentColor)
                         .padding(.horizontal, Self.playerHorizontalPadding)
-                        .padding(.top, Self.playerControlsSpacing)
+                        .padding(.top, isCompact ? MinidiscSpacing.m : Self.playerControlsSpacing)
                 }
 
                 flowGap(isCompact ? MinidiscSpacing.xs : 40)
@@ -286,42 +287,32 @@ struct FullPlayerView: View {
     private func flowingCover(_ playerState: PlayerState, coverArtId: String, isSource: Bool) -> some View {
         GeometryReader { geo in
             let artworkSide = min(geo.size.width, geo.size.height)
-            let isCanvas = hasMotionCanvas && isSource
+            let isCanvas = hasMotionCanvas && isSource && !showLyrics
 
             Group {
-                if let animatedURL = resolvedAnimatedCoverURL {
-                    if isCanvas {
-                        let tallHeight = geo.size.width * 4.0 / 3.0
-                        MotionArtworkView(
-                            videoURL: animatedURL,
-                            fallbackId: coverArtId,
-                            fallbackImage: initialArtwork?.id == coverArtId ? initialArtwork?.image : nil,
-                            cornerRadius: 0,
-                            isPaused: false,
-                            aspectRatio: nil
+                if let animatedURL = resolvedAnimatedCoverURL, isCanvas {
+                    let tallHeight = geo.size.width * 4.0 / 3.0
+                    MotionArtworkView(
+                        videoURL: animatedURL,
+                        fallbackId: coverArtId,
+                        fallbackImage: initialArtwork?.id == coverArtId ? initialArtwork?.image : nil,
+                        cornerRadius: 0,
+                        isPaused: false,
+                        aspectRatio: nil
+                    )
+                    .frame(width: geo.size.width, height: tallHeight)
+                    .clipped()
+                    .mask(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .black, location: 2.0 / 3.0),
+                                .init(color: .clear, location: 1.0)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
                         )
-                        .frame(width: geo.size.width, height: tallHeight)
-                        .clipped()
-                        .mask(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: .black, location: 0),
-                                    .init(color: .black, location: 2.0 / 3.0),
-                                    .init(color: .clear, location: 1.0)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                    } else {
-                        MotionArtworkView(
-                            videoURL: animatedURL,
-                            fallbackId: coverArtId,
-                            fallbackImage: initialArtwork?.id == coverArtId ? initialArtwork?.image : nil,
-                            cornerRadius: isSource ? MinidiscCornerRadius.large : MinidiscCornerRadius.standard,
-                            isPaused: false
-                        )
-                    }
+                    )
                 } else {
                     CoverArtView(id: coverArtId, size: 1000,
                                  initialImage: initialArtwork?.id == coverArtId ? initialArtwork?.image : nil)

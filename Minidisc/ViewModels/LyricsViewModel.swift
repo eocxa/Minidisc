@@ -22,22 +22,36 @@ final class LyricsViewModel {
 
     private var lastPositionUpdateTime: Date = Date()
     private var lastRecordedPosition: Double = 0
+    private var maxInterpolatedPosition: Double = 0
 
     var currentPosition: Double {
         interpolatedPosition()
     }
 
     func interpolatedPosition(at date: Date = Date()) -> Double {
-        guard isPlaying else { return playerState.position }
-        if abs(playerState.position - lastRecordedPosition) > 0.05 {
-            lastRecordedPosition = playerState.position
-            lastPositionUpdateTime = Date()
-        }
-        let delta = date.timeIntervalSince(lastPositionUpdateTime)
-        if delta < 0 || delta > 3.0 {
+        guard isPlaying else {
+            maxInterpolatedPosition = playerState.position
             return playerState.position
         }
-        return playerState.position + delta
+        let reported = playerState.position
+        if abs(reported - lastRecordedPosition) > 0.05 {
+            if abs(reported - lastRecordedPosition) > 0.4 || reported < lastRecordedPosition - 0.3 {
+                maxInterpolatedPosition = reported
+            }
+            lastRecordedPosition = reported
+            lastPositionUpdateTime = date
+        }
+        let delta = date.timeIntervalSince(lastPositionUpdateTime)
+        let raw = (delta >= 0 && delta <= 3.0) ? (lastRecordedPosition + delta) : reported
+        if raw >= maxInterpolatedPosition {
+            maxInterpolatedPosition = raw
+            return raw
+        } else if maxInterpolatedPosition - raw < 0.25 {
+            return maxInterpolatedPosition
+        } else {
+            maxInterpolatedPosition = raw
+            return raw
+        }
     }
 
     private var lyricsList: LyricsList?
@@ -216,6 +230,7 @@ final class LyricsViewModel {
     func userTapped(seconds: Double) {
         resumeTask?.cancel()
         isUserScrolling = false
+        maxInterpolatedPosition = seconds
         lastRecordedPosition = seconds
         lastPositionUpdateTime = Date()
         Task { [weak self] in
