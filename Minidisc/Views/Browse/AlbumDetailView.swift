@@ -93,6 +93,14 @@ struct AlbumDetailView: View {
         )
     }
 
+    private var resolvedAnimatedCoverURL: URL? {
+        resolvedAnimatedTallURL ?? resolvedAnimatedSquareURL
+    }
+
+    private var hasAnimatedCover: Bool {
+        resolvedAnimatedCoverURL != nil
+    }
+
     private var isAlbumFavorite: Bool { !albumFavoriteMatches.isEmpty }
     private var isOnline: Bool { container?.serverState.isOnline == true }
     private var albumCoverId: String { viewModel?.coverArtId ?? coverArtId ?? albumId }
@@ -217,7 +225,7 @@ struct AlbumDetailView: View {
     }
 
     private var topScrollEdges: Edge.Set {
-        resolvedAnimatedTallURL != nil ? .top : []
+        hasAnimatedCover ? .top : []
     }
 
     private var enrichmentKey: String {
@@ -226,12 +234,12 @@ struct AlbumDetailView: View {
 
     @ViewBuilder
     private var scrollContent: some View {
-        let hasTall = resolvedAnimatedTallURL != nil
+        let hasAnimated = hasAnimatedCover
         let songs = displaySongs()
 
         ScrollView {
             LazyVStack(spacing: 0) {
-                headerSection(hasTall: hasTall)
+                headerSection(hasAnimatedCover: hasAnimated)
 
                 AlbumPlaybackActions(
                     albumId: albumId,
@@ -254,7 +262,7 @@ struct AlbumDetailView: View {
                 }
             }
         }
-        .contentMargins(.top, hasTall ? 0 : 0, for: .scrollContent)
+        .contentMargins(.top, hasAnimated ? 0 : 0, for: .scrollContent)
         .ignoresSafeArea(.all, edges: topScrollEdges)
         .toolbarBackground(.hidden, for: .navigationBar)
         .refreshable { await viewModel?.load() }
@@ -465,15 +473,14 @@ struct AlbumDetailView: View {
     // MARK: - Subviews for type-check performance
 
     @ViewBuilder
-    private func headerSection(hasTall: Bool) -> some View {
+    private func headerSection(hasAnimatedCover: Bool) -> some View {
         AlbumArtworkSection(
             coverArtId: viewModel?.coverArtId ?? coverArtId ?? albumId,
             coverImage: effectiveInitialImage,
             albumName: viewModel?.albumName ?? initialName,
-            animatedArtworkURL: resolvedAnimatedSquareURL,
-            animatedTallURL: resolvedAnimatedTallURL
+            animatedURL: resolvedAnimatedCoverURL
         )
-        .padding(.top, hasTall ? 0 : MinidiscSpacing.xxl)
+        .padding(.top, hasAnimatedCover ? 0 : MinidiscSpacing.xxl)
         .zIndex(1)
 
         AlbumMetadataSection(
@@ -487,7 +494,7 @@ struct AlbumDetailView: View {
             isLossless: enrichment?.isLossless ?? false,
             isAtmos: enrichment?.isAtmos ?? false
         )
-        .padding(.top, hasTall ? -60 : MinidiscSpacing.xl)
+        .padding(.top, hasAnimatedCover ? -40 : MinidiscSpacing.xl)
         .zIndex(2)
     }
 
@@ -682,51 +689,36 @@ struct AlbumArtworkSection: View {
     let coverArtId: String
     let coverImage: PlatformImage?
     let albumName: String
-    var animatedArtworkURL: URL? = nil
-    var animatedTallURL: URL? = nil
+    var animatedURL: URL? = nil
 
     var body: some View {
         Group {
-            if let animatedTallURL {
-                GeometryReader { geo in
-                    let videoWidth = geo.size.width
-                    let videoHeight = videoWidth * 4 / 3
-
-                    MotionArtworkView(
-                        videoURL: animatedTallURL,
-                        fallbackId: coverArtId,
-                        fallbackImage: coverImage,
-                        cornerRadius: 0
-                    )
-                    .aspectRatio(3 / 4, contentMode: .fit)
-                    .frame(width: videoWidth, height: videoHeight)
-                    .mask(
-                        LinearGradient(
-                            stops: [
-                                .init(color: .black, location: 0),
-                                .init(color: .black, location: 0.667),
-                                .init(color: .clear, location: 1.0)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
+            if let animatedURL {
+                Color.clear
+                    .frame(height: 420)
+                    .overlay(
+                        MotionArtworkView(
+                            videoURL: animatedURL,
+                            fallbackId: coverArtId,
+                            fallbackImage: coverImage,
+                            cornerRadius: 0
+                        )
+                        .aspectRatio(contentMode: .fill)
+                        .frame(maxWidth: .infinity, maxHeight: 420)
+                        .clipped()
+                        .mask(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .black, location: 0),
+                                    .init(color: .black, location: 0.65),
+                                    .init(color: .clear, location: 1.0)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
                         )
                     )
-                }
-                .aspectRatio(3 / 4, contentMode: .fit)
-                .id(animatedTallURL)
-            } else if let animatedArtworkURL {
-                MotionArtworkView(
-                    videoURL: animatedArtworkURL,
-                    fallbackId: coverArtId,
-                    fallbackImage: coverImage,
-                    cornerRadius: MinidiscCornerRadius.large
-                )
-                .aspectRatio(1, contentMode: .fit)
-                .frame(maxWidth: 340)
-                .minidiscCoverStyle(cornerRadius: MinidiscCornerRadius.large)
-                .shadow(color: .black.opacity(0.16), radius: 12, y: 6)
-                .padding(.horizontal, 64)
-                .id(animatedArtworkURL)
+                    .id(animatedURL)
             } else {
                 CoverArtView(
                     id: coverArtId,

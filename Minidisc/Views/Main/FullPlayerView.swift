@@ -298,13 +298,14 @@ struct FullPlayerView: View {
                             cornerRadius: 0,
                             isPaused: playerState.playbackState != .playing
                         )
-                        .aspectRatio(3 / 4, contentMode: .fit)
-                        .frame(width: geo.size.width, height: geo.size.width * 4 / 3)
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
                         .mask(
                             LinearGradient(
                                 stops: [
                                     .init(color: .black, location: 0),
-                                    .init(color: .black, location: 0.667),
+                                    .init(color: .black, location: 0.65),
                                     .init(color: .clear, location: 1.0)
                                 ],
                                 startPoint: .top,
@@ -333,7 +334,7 @@ struct FullPlayerView: View {
             }
             .matchedGeometryEffect(id: "playerArtwork", in: artworkNamespace ?? morphNS, isSource: isSource)
             .frame(width: isSource ? (isCanvas ? geo.size.width : artworkSide) : nil,
-                   height: isSource ? (isCanvas ? (geo.size.width * 4 / 3) : artworkSide) : nil)
+                   height: isSource ? (isCanvas ? geo.size.height : artworkSide) : nil)
             .shadow(
                 color: isCanvas ? .clear : (isSource ? Color.black.opacity(0.28) : Color.black.opacity(0.12)),
                 radius: isSource ? 18 : 6,

@@ -28,6 +28,7 @@ struct MainTabView: View {
             .overlay(alignment: .topLeading) {
                 if playerPresentation.attachExpandedPlayer {
                     PlayerContainer(configuration: playerPresentation)
+                        .ignoresSafeArea()
                         .transition(.identity)
                 }
             }
