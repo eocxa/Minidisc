@@ -329,6 +329,17 @@ struct FullPlayerView: View {
         .overlay(alignment: .top) {
             topBar
         }
+        .overlay(alignment: .bottom) {
+            if showLyrics && areLyricsControlsHidden {
+                Color.black.opacity(0.001)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 250)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        userDidInteract()
+                    }
+            }
+        }
     }
 
     private func flowGap(_ floor: CGFloat) -> some View {

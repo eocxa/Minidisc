@@ -238,6 +238,7 @@ struct TTMLLineContentView: View {
     let isV2: Bool
     let hasWordSync: Bool
     let isUserScrolling: Bool
+    var nextLineTime: Double? = nil
 
     private var alignment: HorizontalAlignment {
         isV2 ? .trailing : .leading
@@ -272,9 +273,17 @@ struct TTMLLineContentView: View {
                 }
             }
         } else {
+            let start = line.main?.time ?? line.time
+            let end = line.main?.endTime ?? line.endTime ?? nextLineTime.map { min($0, start + 6.0) } ?? (start + 3.0)
+
             Text(line.main?.text ?? line.text)
                 .font(.system(size: 34, weight: .bold))
-                .foregroundStyle(isLineActive ? Color.white : Color.white.opacity(0.22))
+                .karaoke(
+                    time: currentTime,
+                    start: start,
+                    end: end,
+                    configuration: karaokeConfig(isLineActive: isLineActive)
+                )
                 .multilineTextAlignment(isV2 ? .trailing : .leading)
         }
     }
@@ -296,9 +305,21 @@ struct TTMLLineContentView: View {
                 .opacity(0.85)
                 .transition(.opacity.combined(with: .offset(y: isAdlibBefore ? -4 : 4)))
             } else if let adlibText = adlib.text, !adlibText.isEmpty {
+                let aStart = adlib.time ?? line.time
+                let aEnd = adlib.endTime ?? line.endTime ?? (aStart + 2.5)
+
                 Text(adlibText)
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(isLineActive ? Color.white.opacity(0.85) : Color.white.opacity(0.18))
+                    .karaoke(
+                        time: currentTime,
+                        start: aStart,
+                        end: aEnd,
+                        configuration: karaokeConfig(
+                            isLineActive: isLineActive,
+                            dimOpacity: 0.18,
+                            litColor: Color.white.opacity(0.85)
+                        )
+                    )
                     .multilineTextAlignment(isV2 ? .trailing : .leading)
                     .transition(.opacity.combined(with: .offset(y: isAdlibBefore ? -4 : 4)))
             }
@@ -410,7 +431,8 @@ struct TTMLLyricsLineView: View {
                     isLineActive: isLineActive,
                     isV2: isV2,
                     hasWordSync: hasWordSync,
-                    isUserScrolling: isUserScrolling
+                    isUserScrolling: isUserScrolling,
+                    nextLineTime: nextLineTime
                 )
                 .frame(maxWidth: .infinity, alignment: isV2 ? .trailing : .leading)
                 .padding(.leading, (hasMultiArtist && isV2) ? 24 : 0)
@@ -486,13 +508,13 @@ struct TTMLLyricsView: View {
                         }
                     }
                     .padding(.horizontal, MinidiscSpacing.l)
-                    .padding(.top, 56)
+                    .padding(.top, 38)
                     .padding(.bottom, 220)
                 }
                 .scrollIndicators(.hidden)
                 .onAppear {
                     if let currentIndex = viewModel.currentLineIndex {
-                        let anchor = UnitPoint(x: 0.5, y: 0.11)
+                        let anchor = UnitPoint(x: 0.5, y: 0.08)
                         proxy.scrollTo(currentIndex, anchor: anchor)
                     }
                 }
@@ -501,7 +523,7 @@ struct TTMLLyricsView: View {
                           !viewModel.isUserScrolling,
                           let newIndex else { return }
                     withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
-                        let anchor = UnitPoint(x: 0.5, y: 0.11)
+                        let anchor = UnitPoint(x: 0.5, y: 0.08)
                         proxy.scrollTo(newIndex, anchor: anchor)
                     }
                 }
