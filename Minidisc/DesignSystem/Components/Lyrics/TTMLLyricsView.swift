@@ -508,13 +508,13 @@ struct TTMLLyricsView: View {
                         }
                     }
                     .padding(.horizontal, MinidiscSpacing.l)
-                    .padding(.top, 38)
+                    .padding(.top, 72)
                     .padding(.bottom, 220)
                 }
                 .scrollIndicators(.hidden)
                 .onAppear {
                     if let currentIndex = viewModel.currentLineIndex {
-                        let anchor = UnitPoint(x: 0.5, y: 0.08)
+                        let anchor = UnitPoint(x: 0.5, y: 0.14)
                         proxy.scrollTo(currentIndex, anchor: anchor)
                     }
                 }
@@ -523,7 +523,7 @@ struct TTMLLyricsView: View {
                           !viewModel.isUserScrolling,
                           let newIndex else { return }
                     withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
-                        let anchor = UnitPoint(x: 0.5, y: 0.08)
+                        let anchor = UnitPoint(x: 0.5, y: 0.14)
                         proxy.scrollTo(newIndex, anchor: anchor)
                     }
                 }
