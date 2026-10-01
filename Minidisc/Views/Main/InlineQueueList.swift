@@ -307,9 +307,6 @@ private struct LegacyQueueList: View {
                 QueueEntryRow(entry: entry, contentColor: contentColor, secondaryContentColor: secondaryContentColor,
                               loadArtwork: loadArtwork)
             }
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: 2, leading: MinidiscSpacing.l, bottom: 2, trailing: MinidiscSpacing.l))
             .onMove { sources, destination in
                 guard let source = sources.first, entries.indices.contains(source) else { return }
                 let entry = entries[source]
