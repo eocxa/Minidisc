@@ -83,6 +83,12 @@ struct SettingsView: View {
                     Label("Integrations", systemImage: "puzzlepiece.extension")
                         .foregroundStyle(.primary)
                 }
+                NavigationLink {
+                    DataSaverSettingsView()
+                } label: {
+                    Label("Data Saver", systemImage: "leaf")
+                        .foregroundStyle(.primary)
+                }
             }
             aboutSection()
         }

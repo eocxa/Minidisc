@@ -8,8 +8,9 @@ struct MotionArtworkView: View {
     var cornerRadius: CGFloat = MinidiscCornerRadius.large
     var isPaused: Bool = false
     var aspectRatio: CGFloat? = 1
+    var onReady: (() -> Void)? = nil
 
-    @State private var isVideoReady = true
+    @State private var isVideoReady = false
 
     init(
         videoURL: URL?,
@@ -17,7 +18,8 @@ struct MotionArtworkView: View {
         fallbackImage: PlatformImage? = nil,
         cornerRadius: CGFloat = MinidiscCornerRadius.large,
         isPaused: Bool = false,
-        aspectRatio: CGFloat? = 1
+        aspectRatio: CGFloat? = 1,
+        onReady: (() -> Void)? = nil
     ) {
         self.videoURL = videoURL
         self.fallbackId = fallbackId
@@ -25,6 +27,7 @@ struct MotionArtworkView: View {
         self.cornerRadius = cornerRadius
         self.isPaused = isPaused
         self.aspectRatio = aspectRatio
+        self.onReady = onReady
     }
 
     var body: some View {
@@ -54,7 +57,10 @@ struct MotionArtworkView: View {
             // Capa de video animado en bucle si existe URL
             if let videoURL {
                 LoopingVideoPlayerRepresentable(videoURL: videoURL, isPaused: isPaused, onReady: {
-                    isVideoReady = true
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        isVideoReady = true
+                    }
+                    onReady?()
                 })
                 .id(videoURL)
                 .opacity(isVideoReady ? 1.0 : 0.0)
@@ -91,6 +97,7 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
         coordinator.cleanup()
     }
 
+    @MainActor
     final class Coordinator: NSObject {
         var currentURL: URL?
         private var player: AVPlayer?
@@ -148,7 +155,7 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
 
             self.player = avPlayer
             view.playerLayer.player = avPlayer
-            view.playerLayer.videoGravity = .resizeAspect
+            view.playerLayer.videoGravity = .resizeAspectFill
 
             readyObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
                 if item.status == .readyToPlay {
@@ -224,7 +231,7 @@ private class PlayerContainerUIView: UIView {
         clipsToBounds = true
         layer.masksToBounds = true
         playerLayer.masksToBounds = true
-        playerLayer.videoGravity = .resizeAspect
+        playerLayer.videoGravity = .resizeAspectFill
     }
 
     override func layoutSubviews() {

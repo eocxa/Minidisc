@@ -74,6 +74,7 @@ struct AlbumDetailView: View {
     @State private var showThemeColorSheet = false
     @State private var recommendedAlbums: [AlbumID3] = []
     @State private var enrichment: NowLocalEnrichment?
+    @State private var isMotionVideoReady = false
     @Query private var albumFavoriteMatches: [FavoriteRecord]
     @Query private var downloadedAlbumTracks: [DownloadedTrack]
 
@@ -98,7 +99,7 @@ struct AlbumDetailView: View {
     }
 
     private var hasTallAnimatedCover: Bool {
-        resolvedAnimatedTallURL != nil
+        resolvedAnimatedTallURL != nil && isMotionVideoReady
     }
 
     private var hasAnimatedCover: Bool {
@@ -271,6 +272,7 @@ struct AlbumDetailView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .refreshable { await viewModel?.load() }
         .miniPlayerBottomMargin()
+        .animation(.easeInOut(duration: 0.35), value: isMotionVideoReady)
         .minidiscHideTopScrollEdgeEffect()
         .minidiscSongSwipeContainer()
     }
@@ -390,6 +392,7 @@ struct AlbumDetailView: View {
     }
 
     private func handleEnrichmentTask() async {
+        isMotionVideoReady = false
         let album = viewModel?.albumName ?? initialName
         let artist = viewModel?.artistName ?? initialArtistName
         enrichment = await NowLocalService.shared.fetchEnrichment(
@@ -482,7 +485,13 @@ struct AlbumDetailView: View {
             coverArtId: viewModel?.coverArtId ?? coverArtId ?? albumId,
             coverImage: effectiveInitialImage,
             albumName: viewModel?.albumName ?? initialName,
-            animatedURL: resolvedAnimatedTallURL
+            animatedURL: resolvedAnimatedTallURL,
+            isVideoReady: isMotionVideoReady,
+            onVideoReady: {
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    isMotionVideoReady = true
+                }
+            }
         )
         .padding(.top, hasAnimatedCover ? 0 : MinidiscSpacing.xxl)
         .zIndex(1)
@@ -694,11 +703,14 @@ struct AlbumArtworkSection: View {
     let coverImage: PlatformImage?
     let albumName: String
     var animatedURL: URL? = nil
+    var isVideoReady: Bool = false
+    var onVideoReady: (() -> Void)? = nil
 
     var body: some View {
         Group {
             if let animatedURL {
                 GeometryReader { geo in
+                    let isTall = isVideoReady
                     let width = geo.size.width
                     let tallHeight = width * 4.0 / 3.0
 
@@ -706,23 +718,37 @@ struct AlbumArtworkSection: View {
                         videoURL: animatedURL,
                         fallbackId: coverArtId,
                         fallbackImage: coverImage,
-                        cornerRadius: 0,
-                        aspectRatio: nil
+                        cornerRadius: isTall ? 0 : MinidiscCornerRadius.large,
+                        aspectRatio: isTall ? nil : 1,
+                        onReady: onVideoReady
                     )
-                    .frame(width: width, height: tallHeight)
-                    .mask(
-                        LinearGradient(
-                            stops: [
-                                .init(color: .black, location: 0),
-                                .init(color: .black, location: 2.0 / 3.0),
-                                .init(color: .clear, location: 1.0)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
+                    .frame(
+                        width: isTall ? width : min(width - 128, 340),
+                        height: isTall ? tallHeight : min(width - 128, 340)
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .mask {
+                        if isTall {
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .black, location: 0),
+                                    .init(color: .black, location: 2.0 / 3.0),
+                                    .init(color: .clear, location: 1.0)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        } else {
+                            Color.black
+                        }
+                    }
+                    .shadow(
+                        color: isTall ? .clear : .black.opacity(0.16),
+                        radius: isTall ? 0 : 12,
+                        y: isTall ? 0 : 6
                     )
                 }
-                .frame(height: 440)
+                .frame(height: isVideoReady ? 440 : 340)
                 .id(animatedURL)
             } else {
                 CoverArtView(

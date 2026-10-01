@@ -453,7 +453,7 @@ struct TTMLLyricsView: View {
 
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 36) {
+                    LazyVStack(spacing: 30) {
                         ForEach(Array(lyricsResponse.lyrics.enumerated()), id: \.offset) { index, line in
                             let nextLineTime = (index + 1 < lyricsResponse.lyrics.count) ? lyricsResponse.lyrics[index + 1].time : nil
 
@@ -485,16 +485,22 @@ struct TTMLLyricsView: View {
                         }
                     }
                     .padding(.horizontal, 8)
-                    .padding(.top, 36)
+                    .padding(.top, 12)
                     .padding(.bottom, 220)
                 }
                 .scrollIndicators(.hidden)
+                .onAppear {
+                    if let currentIndex = viewModel.currentLineIndex {
+                        let anchor: UnitPoint = (currentIndex == 0) ? .top : UnitPoint(x: 0.5, y: 0.11)
+                        proxy.scrollTo(currentIndex, anchor: anchor)
+                    }
+                }
                 .onChange(of: viewModel.currentLineIndex) { _, newIndex in
                     guard viewModel.autoScrollEnabled,
                           !viewModel.isUserScrolling,
                           let newIndex else { return }
                     withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
-                        let anchor: UnitPoint = (newIndex == 0) ? .top : UnitPoint(x: 0.5, y: 0.25)
+                        let anchor: UnitPoint = (newIndex == 0) ? .top : UnitPoint(x: 0.5, y: 0.11)
                         proxy.scrollTo(newIndex, anchor: anchor)
                     }
                 }

@@ -45,6 +45,7 @@ struct FullPlayerView: View {
     @State private var lyricsViewModel: LyricsViewModel?
     @State private var trackSwipe = TrackSwipeInteraction()
     @State private var currentTrackEnrichment: NowLocalEnrichment?
+    @State private var isMotionArtworkReady = false
     @Namespace private var morphNS
 
     private var resolvedAnimatedCoverURL: URL? {
@@ -58,7 +59,7 @@ struct FullPlayerView: View {
     }
 
     private var hasMotionCanvas: Bool {
-        resolvedAnimatedCoverURL != nil
+        resolvedAnimatedCoverURL != nil && isMotionArtworkReady
     }
 
     private var isCompact: Bool {
@@ -117,6 +118,7 @@ struct FullPlayerView: View {
                     await newVM.load()
                 }
                 .task(id: playerState.currentTrack?.id) {
+                    isMotionArtworkReady = false
                     guard let track = playerState.currentTrack else {
                         currentTrackEnrichment = nil
                         return
@@ -238,7 +240,7 @@ struct FullPlayerView: View {
                         isAtmos: currentTrackEnrichment?.isAtmos ?? false
                     )
                     .padding(.horizontal, Self.playerHorizontalPadding)
-                    .padding(.top, isCompact ? MinidiscSpacing.s : MinidiscSpacing.m)
+                    .padding(.top, MinidiscSpacing.m)
                     .disabled(!playerState.isPlaybackAvailable)
                     .opacity(playerState.isPlaybackAvailable ? 1.0 : 0.4)
                 }
@@ -250,19 +252,20 @@ struct FullPlayerView: View {
                     keepsPauseIcon: trackSwipe.keepsPauseIcon,
                     contentColor: vm.contentColor
                 )
-                .padding(.top, isCompact ? MinidiscSpacing.m : Self.playerControlsSpacing)
+                .padding(.top, Self.playerControlsSpacing)
 
                 if dynamicTypeSize < .accessibility1 {
                     VolumeSection(contentColor: vm.contentColor, secondaryContentColor: vm.secondaryContentColor)
                         .padding(.horizontal, Self.playerHorizontalPadding)
-                        .padding(.top, isCompact ? MinidiscSpacing.m : Self.playerControlsSpacing)
+                        .padding(.top, Self.playerControlsSpacing)
                 }
 
-                flowGap(isCompact ? MinidiscSpacing.xs : 40)
+                flowGap(isCompact ? 24 : 40)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .animation(.spring(response: 0.45, dampingFraction: 0.82), value: showLyrics)
             .animation(.spring(response: 0.45, dampingFraction: 0.82), value: surface)
+            .animation(.easeInOut(duration: 0.4), value: hasMotionCanvas)
 
             BottomToolbar(
                 showLyrics: $showLyrics,
@@ -290,29 +293,43 @@ struct FullPlayerView: View {
             let isCanvas = hasMotionCanvas && isSource && !showLyrics
 
             Group {
-                if let animatedURL = resolvedAnimatedCoverURL, isCanvas {
+                if let animatedURL = resolvedAnimatedCoverURL, isSource, !showLyrics {
                     let tallHeight = geo.size.width * 4.0 / 3.0
                     MotionArtworkView(
                         videoURL: animatedURL,
                         fallbackId: coverArtId,
                         fallbackImage: initialArtwork?.id == coverArtId ? initialArtwork?.image : nil,
-                        cornerRadius: 0,
+                        cornerRadius: isCanvas ? 0 : MinidiscCornerRadius.large,
                         isPaused: false,
-                        aspectRatio: nil
+                        aspectRatio: isCanvas ? nil : 1,
+                        onReady: {
+                            if !isMotionArtworkReady {
+                                withAnimation(.easeInOut(duration: 0.4)) {
+                                    isMotionArtworkReady = true
+                                }
+                            }
+                        }
                     )
-                    .frame(width: geo.size.width, height: tallHeight)
+                    .frame(
+                        width: isCanvas ? geo.size.width : artworkSide,
+                        height: isCanvas ? tallHeight : artworkSide
+                    )
                     .clipped()
-                    .mask(
-                        LinearGradient(
-                            stops: [
-                                .init(color: .black, location: 0),
-                                .init(color: .black, location: 2.0 / 3.0),
-                                .init(color: .clear, location: 1.0)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
+                    .mask {
+                        if isCanvas {
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .black, location: 0),
+                                    .init(color: .black, location: 2.0 / 3.0),
+                                    .init(color: .clear, location: 1.0)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        } else {
+                            Color.black
+                        }
+                    }
                 } else {
                     CoverArtView(id: coverArtId, size: 1000,
                                  initialImage: initialArtwork?.id == coverArtId ? initialArtwork?.image : nil)
@@ -377,8 +394,7 @@ struct FullPlayerView: View {
                         LinearGradient(
                             stops: [
                                 .init(color: .clear, location: 0),
-                                .init(color: .black.opacity(0.45), location: 0.04),
-                                .init(color: .black, location: 0.10),
+                                .init(color: .black, location: 0.02),
                                 .init(color: .black, location: 0.88),
                                 .init(color: .clear, location: 1.0)
                             ],
