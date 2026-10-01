@@ -53,7 +53,7 @@ private struct QueueRow: View {
                     .accessibilityIdentifier("queue.reorder.\(song.id)")
             }
         }
-        .padding(.vertical, MinidiscSpacing.xs)
+        .padding(.vertical, 1)
         .modifier(SongQuickActions(song: song, onAddToPlaylist: playlistAddition.present, onRemove: onRemove))
     }
 
@@ -223,6 +223,7 @@ private struct QueueEntryRow: View {
                  loadArtwork: loadArtwork, showsReorderHint: showsReorderHint)
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 2, leading: MinidiscSpacing.l, bottom: 2, trailing: MinidiscSpacing.l))
             .contentShape(Rectangle())
             .accessibilityIdentifier("queue.track.\(entry.song.id).\(entry.id.occurrence)")
             .onTapGesture {
@@ -266,6 +267,7 @@ private struct ReorderableQueueList: View {
             // Apply row traits outside the reorderable wrapper so List receives them.
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 2, leading: MinidiscSpacing.l, bottom: 2, trailing: MinidiscSpacing.l))
         }
         .reorderContainer(for: QueueRowSnapshot.self) { difference in
             guard difference.sources.count == 1,
@@ -285,6 +287,7 @@ private struct ReorderableQueueList: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .environment(\.defaultMinListRowHeight, 46)
     }
 }
 
@@ -304,6 +307,9 @@ private struct LegacyQueueList: View {
                 QueueEntryRow(entry: entry, contentColor: contentColor, secondaryContentColor: secondaryContentColor,
                               loadArtwork: loadArtwork)
             }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 2, leading: MinidiscSpacing.l, bottom: 2, trailing: MinidiscSpacing.l))
             .onMove { sources, destination in
                 guard let source = sources.first, entries.indices.contains(source) else { return }
                 let entry = entries[source]
@@ -314,6 +320,7 @@ private struct LegacyQueueList: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .environment(\.defaultMinListRowHeight, 46)
         .environment(\.editMode, .constant(.active))
     }
 }
