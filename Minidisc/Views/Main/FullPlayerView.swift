@@ -126,27 +126,27 @@ struct FullPlayerView: View {
                         title: track.title,
                         activeServerBaseURL: container?.serverState.activeServer?.baseURL
                     )
-                    if enrichment?.animatedSquareUrl == nil, let album = track.albumName, !album.isEmpty {
+                    if enrichment?.animatedTallUrl == nil, let album = track.albumName, !album.isEmpty {
                         let albumEnrichment = await NowLocalService.shared.fetchEnrichment(
                             album: album,
                             artist: track.artist,
                             title: nil,
                             activeServerBaseURL: container?.serverState.activeServer?.baseURL
                         )
-                        if let albumSquare = albumEnrichment?.animatedSquareUrl {
+                        if let albumEnrichment {
                             enrichment = NowLocalEnrichment(
                                 found: true,
-                                trackId: enrichment?.trackId ?? albumEnrichment?.trackId,
+                                trackId: enrichment?.trackId ?? albumEnrichment.trackId,
                                 title: enrichment?.title,
                                 artist: enrichment?.artist ?? track.artist,
                                 album: enrichment?.album ?? album,
                                 hasAnimatedArtwork: true,
-                                animatedSquareUrl: albumSquare,
-                                animatedTallUrl: albumEnrichment?.animatedTallUrl ?? enrichment?.animatedTallUrl,
-                                isAtmos: enrichment?.isAtmos ?? albumEnrichment?.isAtmos,
-                                isLossless: enrichment?.isLossless ?? albumEnrichment?.isLossless,
-                                lyricsUrl: enrichment?.lyricsUrl,
-                                lyricsType: enrichment?.lyricsType
+                                animatedSquareUrl: enrichment?.animatedSquareUrl ?? albumEnrichment.animatedSquareUrl,
+                                animatedTallUrl: albumEnrichment.animatedTallUrl ?? enrichment?.animatedTallUrl,
+                                isAtmos: enrichment?.isAtmos ?? albumEnrichment.isAtmos,
+                                isLossless: enrichment?.isLossless ?? albumEnrichment.isLossless,
+                                lyricsUrl: enrichment?.lyricsUrl ?? albumEnrichment.lyricsUrl,
+                                lyricsType: enrichment?.lyricsType ?? albumEnrichment.lyricsType
                             )
                         }
                     }
@@ -175,9 +175,9 @@ struct FullPlayerView: View {
             .minidiscContentWidth()
             .padding(EdgeInsets(
                 top: (hasMotionCanvas && !isCompact) ? 0 : contentInsets.top,
-                leading: contentInsets.leading,
+                leading: (hasMotionCanvas && !isCompact) ? 0 : contentInsets.leading,
                 bottom: contentInsets.bottom,
-                trailing: contentInsets.trailing
+                trailing: (hasMotionCanvas && !isCompact) ? 0 : contentInsets.trailing
             ))
             .environment(\.colorScheme, .dark)
             .environment(\.minidiscPlayingAccent, MinidiscColors.accent)
@@ -298,9 +298,8 @@ struct FullPlayerView: View {
                             cornerRadius: 0,
                             isPaused: playerState.playbackState != .playing
                         )
-                        .aspectRatio(3 / 4, contentMode: .fill)
+                        .aspectRatio(3 / 4, contentMode: .fit)
                         .frame(width: geo.size.width, height: geo.size.width * 4 / 3)
-                        .clipped()
                         .mask(
                             LinearGradient(
                                 stops: [

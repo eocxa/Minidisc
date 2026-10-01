@@ -94,17 +94,30 @@ actor NowLocalService {
     private var lyricsCache: [String: NowLocalLyricsResponse] = [:]
     private let logger = Logger(subsystem: "app.minidisc.nowlocal", category: "Enrichment")
 
-    nonisolated func resolveServerBaseURL(activeServerBaseURL: String?) -> URL? {
+    nonisolated func resolveCandidateBaseURLs(activeServerBaseURL: String?) -> [URL] {
+        var urls: [URL] = []
         if let custom = UserDefaults.standard.string(forKey: "minidisc_nowlocal_url"),
            !custom.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
            let customURL = URL(string: custom) {
-            return customURL
+            urls.append(customURL)
         }
-        guard let active = activeServerBaseURL, let parsed = URL(string: active), let host = parsed.host else {
-            return nil
+        if let active = activeServerBaseURL, let parsed = URL(string: active) {
+            urls.append(parsed)
+            if let host = parsed.host {
+                let scheme = parsed.scheme ?? "http"
+                if parsed.port != 8000, let u8000 = URL(string: "\(scheme)://\(host):8000") {
+                    urls.append(u8000)
+                }
+                if parsed.port != 7430, let u7430 = URL(string: "\(scheme)://\(host):7430") {
+                    urls.append(u7430)
+                }
+            }
         }
-        let scheme = parsed.scheme ?? "http"
-        return URL(string: "\(scheme)://\(host):7430")
+        return urls
+    }
+
+    nonisolated func resolveServerBaseURL(activeServerBaseURL: String?) -> URL? {
+        resolveCandidateBaseURLs(activeServerBaseURL: activeServerBaseURL).first
     }
 
     nonisolated func resolveArtworkURL(path: String?, activeServerBaseURL: String?) -> URL? {
@@ -112,8 +125,12 @@ actor NowLocalService {
         if path.hasPrefix("http://") || path.hasPrefix("https://") {
             return URL(string: path)
         }
-        guard let base = resolveServerBaseURL(activeServerBaseURL: activeServerBaseURL) else { return nil }
-        return URL(string: path, relativeTo: base)?.absoluteURL
+        for base in resolveCandidateBaseURLs(activeServerBaseURL: activeServerBaseURL) {
+            if let resolved = URL(string: path, relativeTo: base)?.absoluteURL {
+                return resolved
+            }
+        }
+        return nil
     }
 
     private func cleanMetadata(_ string: String) -> String {
@@ -152,7 +169,7 @@ actor NowLocalService {
 
         do {
             var request = URLRequest(url: requestURL)
-            request.timeoutInterval = 4.0
+            request.timeoutInterval = 3.0
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
             let decoder = JSONDecoder()
@@ -167,17 +184,77 @@ actor NowLocalService {
         return nil
     }
 
+    private func performLibraryLookup(base: URL, album: String?, artist: String?, title: String?) async -> NowLocalEnrichment? {
+        let libraryURL = base.appendingPathComponent("api/library")
+        do {
+            var request = URLRequest(url: libraryURL)
+            request.timeoutInterval = 3.0
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let tracks = json["tracks"] as? [[String: Any]] else { return nil }
+
+            let albQ = (album ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let artQ = (artist ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let titQ = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+            var bestTrack: [String: Any]?
+            for t in tracks {
+                let tAlb = (t["album"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                let tArt = (t["artist"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                let tTit = (t["title"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+                if !titQ.isEmpty && tTit == titQ && (artQ.isEmpty || tArt.contains(artQ) || artQ.contains(tArt)) {
+                    bestTrack = t
+                    break
+                }
+                if !albQ.isEmpty && tAlb == albQ && (artQ.isEmpty || tArt.contains(artQ) || artQ.contains(tArt)) {
+                    bestTrack = t
+                    if titQ.isEmpty { break }
+                }
+                if !albQ.isEmpty && tAlb == albQ && bestTrack == nil {
+                    bestTrack = t
+                }
+            }
+
+            guard let track = bestTrack else { return nil }
+            let tall = track["animated_tall_url"] as? String
+            let square = track["animated_square_url"] as? String
+            guard tall != nil || square != nil else { return nil }
+
+            return NowLocalEnrichment(
+                found: true,
+                trackId: track["id"] as? String,
+                title: track["title"] as? String,
+                artist: track["artist"] as? String,
+                album: track["album"] as? String,
+                hasAnimatedArtwork: (track["has_animated_artwork"] as? Bool) ?? true,
+                animatedSquareUrl: square,
+                animatedTallUrl: tall,
+                isAtmos: track["is_atmos"] as? Bool,
+                isLossless: track["is_lossless"] as? Bool,
+                lyricsUrl: (track["lyrics_type"] as? String != "none") ? "/api/lyrics/\(track["id"] ?? "")" : nil,
+                lyricsType: track["lyrics_type"] as? String
+            )
+        } catch {
+            return nil
+        }
+    }
+
     func fetchEnrichment(album: String?, artist: String?, title: String? = nil, activeServerBaseURL: String?) async -> NowLocalEnrichment? {
         guard !UserDefaults.standard.bool(forKey: "minidisc_nowlocal_disabled") else { return nil }
-        guard let base = resolveServerBaseURL(activeServerBaseURL: activeServerBaseURL) else { return nil }
+        let candidates = resolveCandidateBaseURLs(activeServerBaseURL: activeServerBaseURL)
+        guard !candidates.isEmpty else { return nil }
 
         let cacheKey = "\(album ?? "")_\(artist ?? "")_\(title ?? "")"
         if let cached = cache[cacheKey] {
             return cached
         }
 
-        if let result = await performEnrichmentRequest(base: base, album: album, artist: artist, title: title, cacheKey: cacheKey) {
-            return result
+        for base in candidates {
+            if let result = await performEnrichmentRequest(base: base, album: album, artist: artist, title: title, cacheKey: cacheKey) {
+                return result
+            }
         }
 
         // Retry with cleaned metadata if raw strings had common tags
@@ -191,9 +268,19 @@ actor NowLocalService {
                 cache[cacheKey] = cachedClean
                 return cachedClean
             }
-            if let cleanResult = await performEnrichmentRequest(base: base, album: cleanAlbum, artist: cleanArtist, title: cleanTitle, cacheKey: cleanKey) {
-                cache[cacheKey] = cleanResult
-                return cleanResult
+            for base in candidates {
+                if let cleanResult = await performEnrichmentRequest(base: base, album: cleanAlbum, artist: cleanArtist, title: cleanTitle, cacheKey: cleanKey) {
+                    cache[cacheKey] = cleanResult
+                    return cleanResult
+                }
+            }
+        }
+
+        // Fallback: check /api/library on each candidate
+        for base in candidates {
+            if let libResult = await performLibraryLookup(base: base, album: album, artist: artist, title: title) {
+                cache[cacheKey] = libResult
+                return libResult
             }
         }
 

@@ -254,6 +254,7 @@ struct AlbumDetailView: View {
                 }
             }
         }
+        .contentMargins(.top, hasTall ? 0 : 0, for: .scrollContent)
         .ignoresSafeArea(.all, edges: topScrollEdges)
         .toolbarBackground(.hidden, for: .navigationBar)
         .refreshable { await viewModel?.load() }
@@ -388,6 +389,7 @@ struct AlbumDetailView: View {
 
     var body: some View {
         scrollContent
+            .ignoresSafeArea(.container, edges: topScrollEdges)
             .alert("Remove downloaded album?", isPresented: $showDeleteAlert) {
                 Button("Remove", role: .destructive) { Task { await viewModel?.deleteDownload() } }
                 Button("Cancel", role: .cancel) { }
@@ -485,7 +487,7 @@ struct AlbumDetailView: View {
             isLossless: enrichment?.isLossless ?? false,
             isAtmos: enrichment?.isAtmos ?? false
         )
-        .padding(.top, hasTall ? -80 : MinidiscSpacing.xl)
+        .padding(.top, hasTall ? -60 : MinidiscSpacing.xl)
         .zIndex(2)
     }
 
@@ -686,26 +688,31 @@ struct AlbumArtworkSection: View {
     var body: some View {
         Group {
             if let animatedTallURL {
-                MotionArtworkView(
-                    videoURL: animatedTallURL,
-                    fallbackId: coverArtId,
-                    fallbackImage: coverImage,
-                    cornerRadius: 0
-                )
-                .aspectRatio(3 / 4, contentMode: .fill)
-                .frame(maxWidth: .infinity, maxHeight: 480)
-                .clipped()
-                .mask(
-                    LinearGradient(
-                        stops: [
-                            .init(color: .black, location: 0),
-                            .init(color: .black, location: 0.667),
-                            .init(color: .clear, location: 1.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
+                GeometryReader { geo in
+                    let videoWidth = geo.size.width
+                    let videoHeight = videoWidth * 4 / 3
+
+                    MotionArtworkView(
+                        videoURL: animatedTallURL,
+                        fallbackId: coverArtId,
+                        fallbackImage: coverImage,
+                        cornerRadius: 0
                     )
-                )
+                    .aspectRatio(3 / 4, contentMode: .fit)
+                    .frame(width: videoWidth, height: videoHeight)
+                    .mask(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .black, location: 0.667),
+                                .init(color: .clear, location: 1.0)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                }
+                .aspectRatio(3 / 4, contentMode: .fit)
                 .id(animatedTallURL)
             } else if let animatedArtworkURL {
                 MotionArtworkView(

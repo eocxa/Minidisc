@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Dot Physics for Instrumental Pauses (Replicating movil.html)
+// MARK: - Dot Physics for Instrumental Pauses (Replicating index.html / Apple Music countdown)
 
 struct DotPhysicsResult {
     let rowScale: CGFloat
@@ -8,80 +8,77 @@ struct DotPhysicsResult {
     let a1: Double
     let a2: Double
     let a3: Double
+    let scale1: CGFloat
+    let scale2: CGFloat
+    let scale3: CGFloat
 }
 
 func computeDotPhysics(currentTimeSec: Double, startTime: Double, nextTime: Double) -> DotPhysicsResult {
     let dur = max(0.8, nextTime - startTime)
-    let elapsed = currentTimeSec - startTime
-    let ratio = max(0.0, min(1.0, elapsed / dur))
     let timeRemaining = max(0.0, nextTime - currentTimeSec)
 
-    let finalDuration = min(2.0, max(0.8, dur * 0.35))
-    let isFinalPulse = timeRemaining <= finalDuration
-
-    let fillEndRatio = max(0.5, 1.0 - (finalDuration / dur))
-    let p1End = fillEndRatio * 0.33
-    let p2End = fillEndRatio * 0.66
-    let p3End = fillEndRatio
-
-    var a1: Double = 0.28
-    var a2: Double = 0.28
-    var a3: Double = 0.28
-
-    if ratio <= p1End {
-        a1 = 0.28 + 0.72 * max(0.0, min(1.0, ratio / p1End))
-    } else {
-        a1 = 1.0
-    }
-
-    if ratio > p1End && ratio <= p2End {
-        a2 = 0.28 + 0.72 * max(0.0, min(1.0, (ratio - p1End) / (p2End - p1End)))
-    } else if ratio > p2End {
-        a2 = 1.0
-    }
-
-    if ratio > p2End && ratio <= p3End {
-        a3 = 0.28 + 0.72 * max(0.0, min(1.0, (ratio - p2End) / (p3End - p2End)))
-    } else if ratio > p3End {
-        a3 = 1.0
-    }
-
+    var a1: Double = 0.25, a2: Double = 0.25, a3: Double = 0.25
+    var scale1: CGFloat = 1.0, scale2: CGFloat = 1.0, scale3: CGFloat = 1.0
     var rowScale: CGFloat = 1.0
     var rowOpacity: Double = 1.0
 
-    let cutoffElapsed = max(0.0, dur - finalDuration)
-    let cutPhase = (cutoffElapsed / 4.0) * .pi * 2.0
-    let cutWave = 0.5 - 0.5 * cos(cutPhase)
-    let startScaleForFinal = 0.98 + 0.20 * cutWave
+    let countdownDur = min(3.0, max(0.8, dur * 0.75))
+    let t3 = countdownDur
+    let t2 = countdownDur * (2.0 / 3.0)
+    let t1 = countdownDur * (1.0 / 3.0)
 
-    if !isFinalPulse {
-        let pulsePeriod = 4.0
-        let pulsePhase = (max(0.0, elapsed) / pulsePeriod) * .pi * 2.0
-        let pulseWave = 0.5 - 0.5 * cos(pulsePhase)
-        rowScale = CGFloat(0.98 + 0.20 * pulseWave)
+    if timeRemaining > t3 {
+        // Idle phase: subtle rhythmic breathing
+        let idlePhase = (currentTimeSec - startTime) * 2.4
+        rowScale = CGFloat(0.96 + 0.05 * sin(idlePhase))
+        rowOpacity = 0.85
+    } else if timeRemaining > t2 {
+        // Dot 1 turns on with bounce
+        let p1 = max(0.0, min(1.0, (t3 - timeRemaining) / max(0.1, t3 - t2)))
+        a1 = 1.0
+        scale1 = CGFloat(p1 < 0.35 ? 1.0 + 0.38 * sin((p1 / 0.35) * .pi) : 1.0)
+        rowScale = 1.02
+        rowOpacity = 1.0
+    } else if timeRemaining > t1 {
+        // Dot 2 turns on with bounce
+        let p2 = max(0.0, min(1.0, (t2 - timeRemaining) / max(0.1, t2 - t1)))
+        a1 = 1.0
+        a2 = 1.0
+        scale1 = 1.0
+        scale2 = CGFloat(p2 < 0.35 ? 1.0 + 0.38 * sin((p2 / 0.35) * .pi) : 1.0)
+        rowScale = 1.04
+        rowOpacity = 1.0
+    } else if timeRemaining > 0.32 {
+        // Dot 3 turns on with bounce - all 3 lit
+        let p3 = max(0.0, min(1.0, (t1 - timeRemaining) / max(0.1, t1 - 0.32)))
+        a1 = 1.0
+        a2 = 1.0
+        a3 = 1.0
+        scale1 = 1.0
+        scale2 = 1.0
+        scale3 = CGFloat(p3 < 0.35 ? 1.0 + 0.38 * sin((p3 / 0.35) * .pi) : 1.0)
+        rowScale = 1.08
+        rowOpacity = 1.0
     } else {
-        let progressFinal = 1.0 - (timeRemaining / finalDuration)
-        if progressFinal < 0.50 {
-            let tA = progressFinal / 0.50
-            rowScale = CGFloat(startScaleForFinal + (1.34 - startScaleForFinal) * sin(tA * .pi / 2.0))
-            rowOpacity = 1.0
-            a1 = 1.0; a2 = 1.0; a3 = 1.0
-        } else {
-            let tB = (progressFinal - 0.50) / 0.50
-            let shrinkDuration = 0.52
-            if tB < shrinkDuration {
-                let p = tB / shrinkDuration
-                rowScale = CGFloat(max(0.0, 1.34 * (1.0 - pow(p, 1.2))))
-                rowOpacity = max(0.0, 1.0 - pow(p, 1.3))
-            } else {
-                rowScale = 0.0
-                rowOpacity = 0.0
-            }
-            a1 = rowOpacity; a2 = rowOpacity; a3 = rowOpacity
-        }
+        // Final fade out and contraction before singing starts (last 0.32s)
+        let pEnd = max(0.0, timeRemaining / 0.32)
+        rowScale = CGFloat(max(0.0, pEnd * 1.08))
+        rowOpacity = max(0.0, pow(pEnd, 1.4))
+        a1 = rowOpacity
+        a2 = rowOpacity
+        a3 = rowOpacity
     }
 
-    return DotPhysicsResult(rowScale: rowScale, rowOpacity: rowOpacity, a1: a1, a2: a2, a3: a3)
+    return DotPhysicsResult(
+        rowScale: rowScale,
+        rowOpacity: rowOpacity,
+        a1: a1,
+        a2: a2,
+        a3: a3,
+        scale1: scale1,
+        scale2: scale2,
+        scale3: scale3
+    )
 }
 
 // MARK: - Three Dots View (Instrumental Marker)
@@ -104,18 +101,21 @@ struct ThreeDotsView: View {
                 .fill(Color.white)
                 .frame(width: 9, height: 9)
                 .opacity(physics.a1)
+                .scaleEffect(physics.scale1)
                 .shadow(color: .white.opacity(physics.a1 * 0.45), radius: 3)
 
             Circle()
                 .fill(Color.white)
                 .frame(width: 9, height: 9)
                 .opacity(physics.a2)
+                .scaleEffect(physics.scale2)
                 .shadow(color: .white.opacity(physics.a2 * 0.45), radius: 3)
 
             Circle()
                 .fill(Color.white)
                 .frame(width: 9, height: 9)
                 .opacity(physics.a3)
+                .scaleEffect(physics.scale3)
                 .shadow(color: .white.opacity(physics.a3 * 0.45), radius: 3)
         }
         .frame(height: 24)
@@ -283,40 +283,45 @@ struct TTMLLineContentView: View {
 
             // Adlibs vocals (if present) - only emerge when line is active and not user-scrolling
             if line.hasAdlib == true, let adlib = line.adlib, isLineActive && !isUserScrolling {
-                if let adlibWords = adlib.words, !adlibWords.isEmpty, hasWordSync {
-                    LyricsFlowLayout(horizontalAlignment: alignment) {
-                        ForEach(adlibWords) { w in
-                            TTMLWordSpanView(
-                                word: w,
-                                currentTime: currentTime,
-                                isLineActive: isLineActive,
-                                font: .system(size: 24, weight: .bold)
-                            )
+                Group {
+                    if let adlibWords = adlib.words, !adlibWords.isEmpty, hasWordSync {
+                        LyricsFlowLayout(horizontalAlignment: alignment) {
+                            ForEach(adlibWords) { w in
+                                TTMLWordSpanView(
+                                    word: w,
+                                    currentTime: currentTime,
+                                    isLineActive: isLineActive,
+                                    font: .system(size: 24, weight: .bold)
+                                )
+                            }
                         }
-                    }
-                    .opacity(0.85)
-                    .transition(.opacity.combined(with: .offset(y: 4)))
-                } else if let adlibText = adlib.text, !adlibText.isEmpty {
-                    let start = adlib.time ?? line.time
-                    let end = adlib.endTime ?? (start + 3.0)
+                    } else if let adlibText = adlib.text, !adlibText.isEmpty {
+                        let start = adlib.time ?? line.time
+                        let end = adlib.endTime ?? (start + 3.0)
 
-                    Text(adlibText)
-                        .font(.system(size: 24, weight: .bold))
-                        .karaoke(
-                            time: currentTime,
-                            start: start,
-                            end: end,
-                            configuration: karaokeConfig(
-                                isLineActive: isLineActive,
-                                dimOpacity: 0.18,
-                                litColor: Color.white.opacity(0.85)
+                        Text(adlibText)
+                            .font(.system(size: 24, weight: .bold))
+                            .karaoke(
+                                time: currentTime,
+                                start: start,
+                                end: end,
+                                configuration: karaokeConfig(
+                                    isLineActive: isLineActive,
+                                    dimOpacity: 0.18,
+                                    litColor: Color.white.opacity(0.85)
+                                )
                             )
-                        )
-                        .multilineTextAlignment(isV2 ? .trailing : .leading)
-                        .transition(.opacity.combined(with: .offset(y: 4)))
+                            .multilineTextAlignment(isV2 ? .trailing : .leading)
+                    }
                 }
+                .opacity(0.85)
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .offset(y: 8)).combined(with: .scale(scale: 0.96)),
+                    removal: .opacity.combined(with: .offset(y: 6)).combined(with: .scale(scale: 0.96))
+                ))
             }
         }
+        .animation(.timingCurve(0.2, 0.95, 0.3, 1.0, duration: 0.70), value: isLineActive)
     }
 }
 
@@ -420,8 +425,8 @@ struct TTMLLyricsLineView: View {
                 .opacity(opacity)
                 .blur(radius: blurRadius)
                 .scaleEffect(scale, anchor: isV2 ? .trailing : .leading)
-                .animation(.easeInOut(duration: 0.3), value: isLineActive)
-                .animation(.easeInOut(duration: 0.25), value: isUserScrolling)
+                .animation(.timingCurve(0.2, 0.95, 0.3, 1.0, duration: 0.65), value: isLineActive)
+                .animation(.timingCurve(0.2, 0.95, 0.3, 1.0, duration: 0.35), value: isUserScrolling)
             }
         }
         .contentShape(Rectangle())
@@ -491,8 +496,8 @@ struct TTMLLyricsView: View {
                     guard viewModel.autoScrollEnabled,
                           !viewModel.isUserScrolling,
                           let newIndex else { return }
-                    withAnimation(.easeInOut(duration: 0.35)) {
-                        let anchor: UnitPoint = (newIndex == 0) ? .top : UnitPoint(x: 0.5, y: 0.22)
+                    withAnimation(.timingCurve(0.2, 0.95, 0.3, 1.0, duration: 0.68)) {
+                        let anchor: UnitPoint = (newIndex == 0) ? .top : UnitPoint(x: 0.5, y: 0.28)
                         proxy.scrollTo(newIndex, anchor: anchor)
                     }
                 }
