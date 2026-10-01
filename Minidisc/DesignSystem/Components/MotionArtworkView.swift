@@ -138,7 +138,6 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
 
             let asset = AVURLAsset(url: url)
             let item = AVPlayerItem(asset: asset)
-            item.audioTimePitchAlgorithm = .lowQualityZeroLatency
 
             let qPlayer = AVQueuePlayer()
             qPlayer.isMuted = true
