@@ -152,7 +152,7 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
 
             readyObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
                 if item.status == .readyToPlay {
-                    DispatchQueue.main.async {
+                    Task { @MainActor [weak self] in
                         self?.onReady()
                         if self?.isUserPaused == false {
                             self?.player?.play()
@@ -166,10 +166,12 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
                 object: item,
                 queue: .main
             ) { [weak self] _ in
-                guard let self else { return }
-                self.player?.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
-                    guard let self, !self.isUserPaused else { return }
-                    self.player?.play()
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.player?.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
+                    if !self.isUserPaused {
+                        self.player?.play()
+                    }
                 }
             }
 
