@@ -9,19 +9,6 @@ struct NowLocalSettingsView: View {
 
     private var activeServer: ServerSnapshot? { container?.serverState.activeServer }
 
-    private var defaultBaseURL: String {
-        guard let active = activeServer?.baseURL, let parsed = URL(string: active), let host = parsed.host else {
-            return "http://100.66.40.34:7430"
-        }
-        let scheme = parsed.scheme ?? "http"
-        return "\(scheme)://\(host):7430"
-    }
-
-    private var effectiveBaseURL: String {
-        let trimmed = customNowLocalURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? defaultBaseURL : trimmed
-    }
-
     var body: some View {
         Form {
             Section {
@@ -49,21 +36,21 @@ struct NowLocalSettingsView: View {
             }
 
             Section {
-                TextField("Default: \(defaultBaseURL)", text: $customNowLocalURL)
+                TextField("http://your-server-ip:7430", text: $customNowLocalURL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
                     .keyboardType(.URL)
 
                 if !customNowLocalURL.isEmpty {
-                    Button("Reset to Default") {
+                    Button("Clear URL") {
                         customNowLocalURL = ""
                     }
                     .foregroundStyle(.red)
                 }
             } header: {
-                Text("Server URL")
+                Text("Server URL & Port")
             } footer: {
-                Text("By default, Minidisc connects to port 7430 on the active server (\(effectiveBaseURL)). You can override this if running NowLocal at a custom endpoint.")
+                Text("Enter the server URL and port where your NowLocal service is hosted (e.g. http://192.168.1.100:7430). Both URL and port must be specified.")
             }
         }
         .formStyle(.grouped)

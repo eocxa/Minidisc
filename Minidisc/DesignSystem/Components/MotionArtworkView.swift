@@ -53,13 +53,12 @@ struct MotionArtworkView: View {
                 cornerRadius: cornerRadius,
                 initialImage: fallbackImage
             )
+            .aspectRatio(1, contentMode: .fit)
 
             // Capa de video animado en bucle si existe URL
             if let videoURL {
                 LoopingVideoPlayerRepresentable(videoURL: videoURL, isPaused: isPaused, onReady: {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        isVideoReady = true
-                    }
+                    isVideoReady = true
                     onReady?()
                 })
                 .id(videoURL)
@@ -103,6 +102,7 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
         private var player: AVPlayer?
         private var isUserPaused = false
         private var readyObserver: NSKeyValueObservation?
+        private var readyForDisplayObserver: NSKeyValueObservation?
         private var endObserver: Any?
         private let onReady: () -> Void
 
@@ -126,6 +126,8 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
         private func cleanCurrentItem() {
             readyObserver?.invalidate()
             readyObserver = nil
+            readyForDisplayObserver?.invalidate()
+            readyForDisplayObserver = nil
             if let endObserver {
                 NotificationCenter.default.removeObserver(endObserver)
                 self.endObserver = nil
@@ -143,7 +145,14 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
             currentURL = url
             cleanCurrentItem()
 
-            let asset = AVURLAsset(url: url)
+            let effectiveURL = MotionArtworkCache.shared.cachedURL(for: url) ?? url
+            if !url.isFileURL && effectiveURL == url {
+                Task {
+                    _ = try? await MotionArtworkCache.shared.loadOrDownload(for: url)
+                }
+            }
+
+            let asset = AVURLAsset(url: effectiveURL)
             let item = AVPlayerItem(asset: asset)
 
             let avPlayer = AVPlayer(playerItem: item)
@@ -160,10 +169,17 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
             readyObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
                 if item.status == .readyToPlay {
                     Task { @MainActor [weak self] in
-                        self?.onReady()
                         if self?.isUserPaused == false {
                             self?.player?.play()
                         }
+                    }
+                }
+            }
+
+            readyForDisplayObserver = view.playerLayer.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak self] layer, _ in
+                if layer.isReadyForDisplay {
+                    Task { @MainActor [weak self] in
+                        self?.onReady()
                     }
                 }
             }

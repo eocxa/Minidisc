@@ -51,7 +51,7 @@ struct LyricsView: View {
                         .id(index)
                     }
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, MinidiscSpacing.l)
                 .padding(.top, 12)
                 .padding(.bottom, 220)
             }

@@ -115,13 +115,6 @@ actor NowLocalService {
                 urls.append(parsed)
             }
         }
-        // Direct Tailscale fallback (100.66.40.34)
-        if let tailscale7430 = URL(string: "http://100.66.40.34:7430"), !urls.contains(tailscale7430) {
-            urls.append(tailscale7430)
-        }
-        if let tailscale8000 = URL(string: "http://100.66.40.34:8000"), !urls.contains(tailscale8000) {
-            urls.append(tailscale8000)
-        }
         return urls
     }
 

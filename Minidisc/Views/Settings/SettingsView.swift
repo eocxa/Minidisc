@@ -449,6 +449,7 @@ struct StorageSettingsView: View {
         isClearingCache = true
         defer { isClearingCache = false }
         await container.audioStreamCache.clearAll()
+        await MotionArtworkCache.shared.clearCache()
         container.dominantColorExtractor.clearCache()
         await refreshUsage()
     }
@@ -458,6 +459,7 @@ struct StorageSettingsView: View {
         await container.downloadService.clearAllCovers()
         artworkImageCache.clearCache()
         artworkImageCache.clearRevalidationMetadata()
+        await MotionArtworkCache.shared.clearCache()
         await refreshUsage()
     }
 }

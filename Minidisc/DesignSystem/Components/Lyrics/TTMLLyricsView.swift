@@ -292,7 +292,7 @@ struct TTMLLineContentView: View {
                                 word: w,
                                 currentTime: currentTime,
                                 isLineActive: isLineActive,
-                                font: .system(size: 24, weight: .bold)
+                                font: .system(size: 20, weight: .bold)
                             )
                         }
                     }
@@ -303,7 +303,7 @@ struct TTMLLineContentView: View {
                     let end = adlib.endTime ?? (start + 3.0)
 
                     Text(adlibText)
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.system(size: 20, weight: .bold))
                         .karaoke(
                             time: currentTime,
                             start: start,
@@ -484,7 +484,7 @@ struct TTMLLyricsView: View {
                             .padding(.bottom, 40)
                         }
                     }
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, MinidiscSpacing.l)
                     .padding(.top, 12)
                     .padding(.bottom, 220)
                 }
