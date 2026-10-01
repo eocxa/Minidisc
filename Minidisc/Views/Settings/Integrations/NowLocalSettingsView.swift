@@ -11,7 +11,7 @@ struct NowLocalSettingsView: View {
 
     private var defaultBaseURL: String {
         guard let active = activeServer?.baseURL, let parsed = URL(string: active), let host = parsed.host else {
-            return "http://<server-host>:7430"
+            return "http://100.66.40.34:7430"
         }
         let scheme = parsed.scheme ?? "http"
         return "\(scheme)://\(host):7430"

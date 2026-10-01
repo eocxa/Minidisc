@@ -104,16 +104,23 @@ actor NowLocalService {
         if let active = activeServerBaseURL, let parsed = URL(string: active) {
             if let host = parsed.host {
                 let scheme = parsed.scheme ?? "http"
-                if let u8000 = URL(string: "\(scheme)://\(host):8000"), !urls.contains(u8000) {
-                    urls.append(u8000)
-                }
                 if let u7430 = URL(string: "\(scheme)://\(host):7430"), !urls.contains(u7430) {
                     urls.append(u7430)
+                }
+                if let u8000 = URL(string: "\(scheme)://\(host):8000"), !urls.contains(u8000) {
+                    urls.append(u8000)
                 }
             }
             if !urls.contains(parsed) {
                 urls.append(parsed)
             }
+        }
+        // Direct Tailscale fallback (100.66.40.34)
+        if let tailscale7430 = URL(string: "http://100.66.40.34:7430"), !urls.contains(tailscale7430) {
+            urls.append(tailscale7430)
+        }
+        if let tailscale8000 = URL(string: "http://100.66.40.34:8000"), !urls.contains(tailscale8000) {
+            urls.append(tailscale8000)
         }
         return urls
     }
