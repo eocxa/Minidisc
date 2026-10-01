@@ -413,7 +413,7 @@ struct AlbumDetailView: View {
                 await handleCoverArtChanged(artId: viewModel?.coverArtId)
             }
             .task(id: recommendationRequest) {
-                await handleRecommendationChange(request: recommendationRequest)
+                await handleRecommendationChanged(request: recommendationRequest)
             }
             .task(id: enrichmentKey) {
                 await handleEnrichmentTask()
