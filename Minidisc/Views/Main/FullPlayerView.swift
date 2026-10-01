@@ -196,7 +196,7 @@ struct FullPlayerView: View {
 
         VStack(spacing: 0) {
             VStack(spacing: 0) {
-                flowGap(isCompact ? 36 : (hasMotionCanvas ? 0 : Self.playerTopGap))
+                flowGap(isCompact ? 52 : (hasMotionCanvas ? 0 : 20))
 
                 ZStack {
                     if showLyrics {
@@ -297,7 +297,7 @@ struct FullPlayerView: View {
                             fallbackId: coverArtId,
                             fallbackImage: initialArtwork?.id == coverArtId ? initialArtwork?.image : nil,
                             cornerRadius: 0,
-                            isPaused: playerState.playbackState != .playing,
+                            isPaused: false,
                             aspectRatio: nil
                         )
                         .frame(width: geo.size.width, height: tallHeight)
@@ -319,7 +319,7 @@ struct FullPlayerView: View {
                             fallbackId: coverArtId,
                             fallbackImage: initialArtwork?.id == coverArtId ? initialArtwork?.image : nil,
                             cornerRadius: isSource ? MinidiscCornerRadius.large : MinidiscCornerRadius.standard,
-                            isPaused: playerState.playbackState != .playing
+                            isPaused: false
                         )
                     }
                 } else {
@@ -341,7 +341,7 @@ struct FullPlayerView: View {
                 radius: isSource ? 18 : 6,
                 y: isSource ? 10 : 3
             )
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: isCanvas ? .top : .center)
             .trackSwipeGesture(
                 interaction: trackSwipe,
                 playerState: playerState,
@@ -497,7 +497,7 @@ struct FullPlayerView: View {
                 .frame(maxWidth: .infinity, minHeight: 28, alignment: .top)
                 .contentShape(Rectangle())
         }
-        .padding(.top, (hasMotionCanvas && !isCompact) ? contentInsets.top : 0)
+        .padding(.top, (hasMotionCanvas && !isCompact) ? (contentInsets.top + 8) : 8)
         .buttonStyle(.plain)
         .accessibilityLabel("Close player")
     }

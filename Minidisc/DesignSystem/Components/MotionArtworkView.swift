@@ -63,7 +63,7 @@ struct MotionArtworkView: View {
     }
 }
 
-// MARK: - Looping Video Player (AVPlayerLooper + AVQueuePlayer)
+// MARK: - Looping Video Player
 
 private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
     let videoURL: URL
@@ -84,11 +84,7 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
         if context.coordinator.currentURL != videoURL {
             context.coordinator.setup(url: videoURL, in: uiView)
         }
-        if isPaused {
-            context.coordinator.pause()
-        } else {
-            context.coordinator.play()
-        }
+        context.coordinator.setPaused(isPaused)
     }
 
     static func dismantleUIView(_ uiView: PlayerContainerUIView, coordinator: Coordinator) {
@@ -97,10 +93,10 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
 
     final class Coordinator: NSObject {
         var currentURL: URL?
-        private var player: AVQueuePlayer?
-        private var looper: AVPlayerLooper?
+        private var player: AVPlayer?
         private var isUserPaused = false
         private var readyObserver: NSKeyValueObservation?
+        private var endObserver: Any?
         private let onReady: () -> Void
 
         init(onReady: @escaping () -> Void) {
@@ -120,35 +116,38 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
             )
         }
 
-        func cleanup() {
-            NotificationCenter.default.removeObserver(self)
+        private func cleanCurrentItem() {
             readyObserver?.invalidate()
             readyObserver = nil
+            if let endObserver {
+                NotificationCenter.default.removeObserver(endObserver)
+                self.endObserver = nil
+            }
             player?.pause()
             player = nil
-            looper = nil
+        }
+
+        func cleanup() {
+            NotificationCenter.default.removeObserver(self)
+            cleanCurrentItem()
         }
 
         func setup(url: URL, in view: PlayerContainerUIView) {
             currentURL = url
-            readyObserver?.invalidate()
-            player?.pause()
-            player = nil
-            looper = nil
+            cleanCurrentItem()
 
             let asset = AVURLAsset(url: url)
             let item = AVPlayerItem(asset: asset)
 
-            let qPlayer = AVQueuePlayer()
-            qPlayer.isMuted = true
-            qPlayer.volume = 0.0
-            qPlayer.preventsDisplaySleepDuringVideoPlayback = false
-            qPlayer.automaticallyWaitsToMinimizeStalling = false
-            qPlayer.actionAtItemEnd = .none
+            let avPlayer = AVPlayer(playerItem: item)
+            avPlayer.isMuted = true
+            avPlayer.volume = 0.0
+            avPlayer.preventsDisplaySleepDuringVideoPlayback = false
+            avPlayer.automaticallyWaitsToMinimizeStalling = true
+            avPlayer.actionAtItemEnd = .none
 
-            self.looper = AVPlayerLooper(player: qPlayer, templateItem: item)
-            self.player = qPlayer
-            view.playerLayer.player = qPlayer
+            self.player = avPlayer
+            view.playerLayer.player = avPlayer
             view.playerLayer.videoGravity = .resizeAspect
 
             readyObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
@@ -162,19 +161,39 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
                 }
             }
 
+            endObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: item,
+                queue: .main
+            ) { [weak self] _ in
+                guard let self else { return }
+                self.player?.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+                    guard let self, !self.isUserPaused else { return }
+                    self.player?.play()
+                }
+            }
+
             if !isUserPaused {
-                qPlayer.play()
+                avPlayer.play()
+            }
+        }
+
+        func setPaused(_ paused: Bool) {
+            guard paused != isUserPaused else { return }
+            isUserPaused = paused
+            if paused {
+                player?.pause()
+            } else {
+                player?.play()
             }
         }
 
         func play() {
-            isUserPaused = false
-            player?.play()
+            setPaused(false)
         }
 
         func pause() {
-            isUserPaused = true
-            player?.pause()
+            setPaused(true)
         }
 
         @objc private func handleBackground() {
