@@ -36,48 +36,56 @@ struct LyricsView: View {
 
     @ViewBuilder
     private func loadedContent(_ structured: StructuredLyrics) -> some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 22) {
-                    ForEach(Array(structured.line.enumerated()), id: \.offset) { index, line in
-                        LyricsLineView(
-                            value: line.value,
-                            index: index,
-                            currentIndex: viewModel.currentLineIndex,
-                            isSynced: structured.synced,
-                            isTappable: structured.synced && line.start != nil,
-                            onTap: { viewModel.userTapped(lineIndex: index) }
-                        )
-                        .id(index)
+        GeometryReader { geo in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 22) {
+                        ForEach(Array(structured.line.enumerated()), id: \.offset) { index, line in
+                            VStack(alignment: .leading, spacing: 0) {
+                                Color.clear
+                                    .frame(width: 1, height: 1)
+                                    .id("anchor_\(index)")
+
+                                LyricsLineView(
+                                    value: line.value,
+                                    index: index,
+                                    currentIndex: viewModel.currentLineIndex,
+                                    isSynced: structured.synced,
+                                    isTappable: structured.synced && line.start != nil,
+                                    onTap: { viewModel.userTapped(lineIndex: index) }
+                                )
+                            }
+                            .id(index)
+                        }
+                    }
+                    .padding(.horizontal, MinidiscSpacing.l)
+                    .padding(.top, 56)
+                    .padding(.bottom, max(750, geo.size.height * 0.90))
+                }
+                .scrollIndicators(.hidden)
+                .onAppear {
+                    if let currentIndex = viewModel.currentLineIndex {
+                        proxy.scrollTo("anchor_\(currentIndex)", anchor: lyricsAnchor(for: currentIndex))
                     }
                 }
-                .padding(.horizontal, MinidiscSpacing.l)
-                .padding(.top, 56)
-                .padding(.bottom, 220)
-            }
-            .scrollIndicators(.hidden)
-            .onAppear {
-                if let currentIndex = viewModel.currentLineIndex {
-                    proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex))
+                .onChange(of: viewModel.currentLineIndex) { _, newIndex in
+                    guard viewModel.autoScrollEnabled,
+                          !viewModel.isUserScrolling,
+                          let newIndex else { return }
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        proxy.scrollTo("anchor_\(newIndex)", anchor: lyricsAnchor(for: newIndex))
+                    }
                 }
-            }
-            .onChange(of: viewModel.currentLineIndex) { _, newIndex in
-                guard viewModel.autoScrollEnabled,
-                      !viewModel.isUserScrolling,
-                      let newIndex else { return }
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    proxy.scrollTo(newIndex, anchor: lyricsAnchor(for: newIndex))
-                }
-            }
-            .onScrollPhaseChange { _, newPhase in
-                switch newPhase {
-                case .interacting:
-                    viewModel.userStartedScrolling()
-                case .decelerating, .idle:
-                    guard viewModel.isUserScrolling else { return }
-                    viewModel.userStoppedScrolling()
-                default:
-                    break
+                .onScrollPhaseChange { _, newPhase in
+                    switch newPhase {
+                    case .interacting:
+                        viewModel.userStartedScrolling()
+                    case .decelerating, .idle:
+                        guard viewModel.isUserScrolling else { return }
+                        viewModel.userStoppedScrolling()
+                    default:
+                        break
+                    }
                 }
             }
         }
@@ -85,9 +93,9 @@ struct LyricsView: View {
 
     private func lyricsAnchor(for index: Int?) -> UnitPoint {
         guard let index, index > 0 else {
-            return UnitPoint(x: 0.5, y: 0.118)
+            return UnitPoint(x: 0.5, y: 0.090)
         }
-        return UnitPoint(x: 0.5, y: 0.096)
+        return UnitPoint(x: 0.5, y: 0.060)
     }
 
 
