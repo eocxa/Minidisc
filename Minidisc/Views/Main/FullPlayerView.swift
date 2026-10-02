@@ -212,11 +212,6 @@ struct FullPlayerView: View {
                     userDidInteract()
                 }
             }
-            .onChange(of: lyricsViewModel?.currentLineIndex) { _, _ in
-                if showLyrics {
-                    userDidInteract()
-                }
-            }
         .background {
             FullPlayerBackground(colors: colors)
                 .contentShape(Rectangle())
@@ -454,8 +449,8 @@ struct FullPlayerView: View {
                             stops: [
                                 .init(color: .clear, location: 0),
                                 .init(color: .black, location: 0.02),
-                                .init(color: .black, location: 0.88),
-                                .init(color: .clear, location: 1.0)
+                                .init(color: .black, location: 0.94),
+                                .init(color: .black.opacity(0.18), location: 1.0)
                             ],
                             startPoint: .top,
                             endPoint: .bottom

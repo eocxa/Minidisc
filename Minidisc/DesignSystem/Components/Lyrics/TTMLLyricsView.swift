@@ -129,9 +129,9 @@ struct ThreeDotsView: View {
 
 struct LyricsFlowLayout: Layout {
     var horizontalAlignment: HorizontalAlignment = .leading
-    var verticalSpacing: CGFloat = 4
+    var verticalSpacing: CGFloat = 2
 
-    init(horizontalAlignment: HorizontalAlignment = .leading, verticalSpacing: CGFloat = 4) {
+    init(horizontalAlignment: HorizontalAlignment = .leading, verticalSpacing: CGFloat = 2) {
         self.horizontalAlignment = horizontalAlignment
         self.verticalSpacing = verticalSpacing
     }
@@ -187,6 +187,56 @@ struct LyricsFlowLayout: Layout {
                 x += size.width
             }
             y += row.height + verticalSpacing
+        }
+    }
+}
+
+// MARK: - Word Unit Grouping (Prevents breaking words across lines)
+
+private func groupWordsIntoWordUnits(_ words: [NowLocalLyricWord]) -> [[NowLocalLyricWord]] {
+    var groups: [[NowLocalLyricWord]] = []
+    var currentGroup: [NowLocalLyricWord] = []
+
+    for w in words {
+        currentGroup.append(w)
+
+        let trimmed = w.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasWhitespace = w.text.contains(where: { $0.isWhitespace || $0.isNewline })
+
+        // Chinese / Japanese ideographs and kana naturally wrap per character
+        let isCJKNoSpace = !trimmed.isEmpty && trimmed.unicodeScalars.allSatisfy { scalar in
+            (0x4E00...0x9FFF).contains(scalar.value) || // CJK Unified Ideographs
+            (0x3040...0x309F).contains(scalar.value) || // Hiragana
+            (0x30A0...0x30FF).contains(scalar.value)    // Katakana
+        }
+
+        if hasWhitespace || isCJKNoSpace {
+            groups.append(currentGroup)
+            currentGroup = []
+        }
+    }
+    if !currentGroup.isEmpty {
+        groups.append(currentGroup)
+    }
+    return groups
+}
+
+struct TTMLWordUnitView: View {
+    let words: [NowLocalLyricWord]
+    let currentTime: Double
+    let isLineActive: Bool
+    var font: Font = .system(size: 34, weight: .bold)
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(words.enumerated()), id: \.offset) { _, w in
+                TTMLWordSpanView(
+                    word: w,
+                    currentTime: currentTime,
+                    isLineActive: isLineActive,
+                    font: font
+                )
+            }
         }
     }
 }
@@ -251,10 +301,10 @@ struct TTMLLineContentView: View {
     @ViewBuilder
     private var mainVocalsView: some View {
         if let mainWords = line.main?.words, !mainWords.isEmpty, hasWordSync {
-            LyricsFlowLayout(horizontalAlignment: alignment) {
-                ForEach(Array(mainWords.enumerated()), id: \.offset) { _, w in
-                    TTMLWordSpanView(
-                        word: w,
+            LyricsFlowLayout(horizontalAlignment: alignment, verticalSpacing: 2) {
+                ForEach(Array(groupWordsIntoWordUnits(mainWords).enumerated()), id: \.offset) { _, group in
+                    TTMLWordUnitView(
+                        words: group,
                         currentTime: currentTime,
                         isLineActive: isLineActive,
                         font: .system(size: 34, weight: .bold)
@@ -262,10 +312,10 @@ struct TTMLLineContentView: View {
                 }
             }
         } else if let words = line.words, !words.isEmpty, hasWordSync {
-            LyricsFlowLayout(horizontalAlignment: alignment) {
-                ForEach(Array(words.enumerated()), id: \.offset) { _, w in
-                    TTMLWordSpanView(
-                        word: w,
+            LyricsFlowLayout(horizontalAlignment: alignment, verticalSpacing: 2) {
+                ForEach(Array(groupWordsIntoWordUnits(words).enumerated()), id: \.offset) { _, group in
+                    TTMLWordUnitView(
+                        words: group,
                         currentTime: currentTime,
                         isLineActive: isLineActive,
                         font: .system(size: 34, weight: .bold)
@@ -292,10 +342,10 @@ struct TTMLLineContentView: View {
     private var adlibsView: some View {
         if line.hasAdlib == true, let adlib = line.adlib, isLineActive && !isUserScrolling {
             if let adlibWords = adlib.words, !adlibWords.isEmpty, hasWordSync {
-                LyricsFlowLayout(horizontalAlignment: alignment) {
-                    ForEach(Array(adlibWords.enumerated()), id: \.offset) { _, w in
-                        TTMLWordSpanView(
-                            word: w,
+                LyricsFlowLayout(horizontalAlignment: alignment, verticalSpacing: 2) {
+                    ForEach(Array(groupWordsIntoWordUnits(adlibWords).enumerated()), id: \.offset) { _, group in
+                        TTMLWordUnitView(
+                            words: group,
                             currentTime: currentTime,
                             isLineActive: isLineActive,
                             font: .system(size: 20, weight: .bold)
@@ -327,7 +377,7 @@ struct TTMLLineContentView: View {
     }
 
     var body: some View {
-        VStack(alignment: alignment, spacing: 4) {
+        VStack(alignment: alignment, spacing: 2) {
             if isAdlibBefore {
                 adlibsView
                 mainVocalsView
@@ -382,9 +432,9 @@ struct TTMLLyricsLineView: View {
         if isLineActive { return 0 }
         guard !activeIndices.isEmpty else { return 0 }
         switch distance {
-        case 1: return 0.8
-        case 2: return 2.0
-        default: return 4.0
+        case 1: return 0.5
+        case 2: return 1.0
+        default: return 2.0
         }
     }
 
@@ -395,13 +445,13 @@ struct TTMLLyricsLineView: View {
         if isLineActive { return 1.0 }
         guard let minActive = activeIndices.min() else { return 1.0 }
         if index < minActive {
-            return distance == 1 ? 0.38 : 0.22
+            return distance == 1 ? 0.40 : 0.25
         }
         switch distance {
-        case 1: return 0.55
-        case 2: return 0.38
-        case 3: return 0.28
-        default: return 0.18
+        case 1: return 0.60
+        case 2: return 0.45
+        case 3: return 0.35
+        default: return 0.28
         }
     }
 
@@ -471,7 +521,7 @@ struct TTMLLyricsView: View {
 
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 30) {
+                    LazyVStack(spacing: 22) {
                         ForEach(Array(lyricsResponse.lyrics.enumerated()), id: \.offset) { index, line in
                             let isDot = (line.text == "…" || line.text == "...")
                             let isActive = viewModel.activeLineIndices.contains(index)
@@ -508,13 +558,13 @@ struct TTMLLyricsView: View {
                         }
                     }
                     .padding(.horizontal, MinidiscSpacing.l)
-                    .padding(.top, 72)
+                    .padding(.top, 92)
                     .padding(.bottom, 220)
                 }
                 .scrollIndicators(.hidden)
                 .onAppear {
                     if let currentIndex = viewModel.currentLineIndex {
-                        let anchor = UnitPoint(x: 0.5, y: 0.14)
+                        let anchor = UnitPoint(x: 0.5, y: 0.18)
                         proxy.scrollTo(currentIndex, anchor: anchor)
                     }
                 }
@@ -523,7 +573,7 @@ struct TTMLLyricsView: View {
                           !viewModel.isUserScrolling,
                           let newIndex else { return }
                     withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
-                        let anchor = UnitPoint(x: 0.5, y: 0.14)
+                        let anchor = UnitPoint(x: 0.5, y: 0.18)
                         proxy.scrollTo(newIndex, anchor: anchor)
                     }
                 }
