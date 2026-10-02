@@ -52,14 +52,13 @@ struct LyricsView: View {
                     }
                 }
                 .padding(.horizontal, MinidiscSpacing.l)
-                .padding(.top, 60)
+                .padding(.top, 52)
                 .padding(.bottom, 220)
             }
             .scrollIndicators(.hidden)
             .onAppear {
                 if let currentIndex = viewModel.currentLineIndex {
-                    let anchor = UnitPoint(x: 0.5, y: 0.118)
-                    proxy.scrollTo(currentIndex, anchor: anchor)
+                    proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex))
                 }
             }
             .onChange(of: viewModel.currentLineIndex) { _, newIndex in
@@ -67,8 +66,7 @@ struct LyricsView: View {
                       !viewModel.isUserScrolling,
                       let newIndex else { return }
                 withAnimation(.easeInOut(duration: 0.3)) {
-                    let anchor = UnitPoint(x: 0.5, y: 0.118)
-                    proxy.scrollTo(newIndex, anchor: anchor)
+                    proxy.scrollTo(newIndex, anchor: lyricsAnchor(for: newIndex))
                 }
             }
             .onScrollPhaseChange { _, newPhase in
@@ -83,6 +81,13 @@ struct LyricsView: View {
                 }
             }
         }
+    }
+
+    private func lyricsAnchor(for index: Int?) -> UnitPoint {
+        guard let index, index > 0 else {
+            return UnitPoint(x: 0.5, y: 0.118)
+        }
+        return UnitPoint(x: 0.5, y: 0.080)
     }
 
 

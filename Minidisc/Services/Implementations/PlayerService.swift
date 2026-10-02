@@ -3136,7 +3136,7 @@ actor PlayerService: PlayerServiceProtocol {
         stopProgressTimer()
         progressTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(500))
+                try? await Task.sleep(for: .milliseconds(250))
                 guard !Task.isCancelled, let self else { break }
                 await self.performProgressTick()
             }

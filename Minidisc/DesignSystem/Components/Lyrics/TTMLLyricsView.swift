@@ -549,14 +549,13 @@ struct TTMLLyricsView: View {
                         }
                     }
                     .padding(.horizontal, MinidiscSpacing.l)
-                    .padding(.top, 60)
+                    .padding(.top, 52)
                     .padding(.bottom, 220)
                 }
                 .scrollIndicators(.hidden)
                 .onAppear {
                     if let currentIndex = viewModel.currentLineIndex {
-                        let anchor = UnitPoint(x: 0.5, y: 0.118)
-                        proxy.scrollTo(currentIndex, anchor: anchor)
+                        proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex))
                     }
                 }
                 .onChange(of: viewModel.currentLineIndex) { _, newIndex in
@@ -564,8 +563,7 @@ struct TTMLLyricsView: View {
                           !viewModel.isUserScrolling,
                           let newIndex else { return }
                     withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
-                        let anchor = UnitPoint(x: 0.5, y: 0.118)
-                        proxy.scrollTo(newIndex, anchor: anchor)
+                        proxy.scrollTo(newIndex, anchor: lyricsAnchor(for: newIndex))
                     }
                 }
                 .onScrollPhaseChange { _, newPhase in
@@ -581,5 +579,16 @@ struct TTMLLyricsView: View {
                 }
             }
         }
+    }
+
+    private func lyricsAnchor(for index: Int?) -> UnitPoint {
+        guard let index, index > 0 else {
+            return UnitPoint(x: 0.5, y: 0.118)
+        }
+        let hasPrecedingText = lyricsResponse.lyrics[0..<index].contains { $0.text != "…" && $0.text != "..." }
+        if !hasPrecedingText {
+            return UnitPoint(x: 0.5, y: 0.118)
+        }
+        return UnitPoint(x: 0.5, y: 0.080)
     }
 }
