@@ -599,13 +599,13 @@ struct TTMLLyricsView: View {
                             }
                         }
                         .padding(.horizontal, MinidiscSpacing.l)
-                        .padding(.top, 56)
+                        .padding(.top, 62)
                         .padding(.bottom, max(750, geo.size.height * 0.90))
                     }
                     .scrollIndicators(.hidden)
                     .onAppear {
                         if let currentIndex = viewModel.currentLineIndex {
-                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height))
+                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height, containerWidth: contentWidth))
                         }
                     }
                     .task {
@@ -613,7 +613,7 @@ struct TTMLLyricsView: View {
                         guard !Task.isCancelled, !viewModel.isUserScrolling else { return }
                         if let currentIndex = viewModel.currentLineIndex {
                             withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
-                                proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height))
+                                proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height, containerWidth: contentWidth))
                             }
                         }
                     }
@@ -622,7 +622,7 @@ struct TTMLLyricsView: View {
                               !viewModel.isUserScrolling,
                               let newIndex else { return }
                         withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
-                            proxy.scrollTo(newIndex, anchor: lyricsAnchor(for: newIndex, in: geo.size.height))
+                            proxy.scrollTo(newIndex, anchor: lyricsAnchor(for: newIndex, in: geo.size.height, containerWidth: contentWidth))
                         }
                     }
                     .onChange(of: viewModel.isUserScrolling) { _, isScrolling in
@@ -630,7 +630,7 @@ struct TTMLLyricsView: View {
                               !isScrolling,
                               let currentIndex = viewModel.currentLineIndex else { return }
                         withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
-                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height))
+                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height, containerWidth: contentWidth))
                         }
                     }
                     .onChange(of: areControlsHidden) { _, _ in
@@ -638,7 +638,7 @@ struct TTMLLyricsView: View {
                               !viewModel.isUserScrolling,
                               let currentIndex = viewModel.currentLineIndex else { return }
                         withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height))
+                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height, containerWidth: contentWidth))
                         }
                     }
                     .onChange(of: geo.size.height) { _, newHeight in
@@ -646,7 +646,7 @@ struct TTMLLyricsView: View {
                               !viewModel.isUserScrolling,
                               let currentIndex = viewModel.currentLineIndex else { return }
                         withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: newHeight))
+                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: newHeight, containerWidth: contentWidth))
                         }
                     }
                     .onScrollPhaseChange { _, newPhase in
@@ -665,10 +665,42 @@ struct TTMLLyricsView: View {
         }
     }
 
-    private func lyricsAnchor(for index: Int?, in containerHeight: CGFloat) -> UnitPoint {
+    private func estimatedHeight(for index: Int?, containerWidth: CGFloat) -> CGFloat {
+        guard let index, index >= 0, index < lyricsResponse.lyrics.count else { return 42.0 }
+        let line = lyricsResponse.lyrics[index]
+        if line.text == "…" || line.text == "..." { return 42.0 }
+
+        let availableWidth = hasMultiArtist ? (containerWidth * 0.75) : containerWidth
+        let charsPerLine = max(10.0, availableWidth / 17.5)
+
+        let mainText = line.main?.text ?? line.text
+        let mainSublines = mainText.components(separatedBy: "\n")
+        var mainRows = 0.0
+        for sub in mainSublines {
+            let count = max(1, sub.count)
+            mainRows += max(1.0, ceil(Double(count) / charsPerLine))
+        }
+        var height = max(1.0, mainRows) * 42.0
+
+        if line.hasAdlib == true, let adlib = line.adlib, let adlibText = adlib.text, !adlibText.isEmpty {
+            let adlibCharsPerLine = max(14.0, availableWidth / 10.5)
+            let adlibSublines = adlibText.components(separatedBy: "\n")
+            var adlibRows = 0.0
+            for sub in adlibSublines {
+                let count = max(1, sub.count)
+                adlibRows += max(1.0, ceil(Double(count) / adlibCharsPerLine))
+            }
+            height += max(1.0, adlibRows) * 26.0 + 4.0
+        }
+        return height
+    }
+
+    private func lyricsAnchor(for index: Int?, in containerHeight: CGFloat, containerWidth: CGFloat) -> UnitPoint {
         let fullHeight = areControlsHidden ? containerHeight : (containerHeight + 270.0)
         let targetTopOffset = 0.090 * fullHeight
-        let anchorY = targetTopOffset / max(1.0, containerHeight)
+        let itemH = estimatedHeight(for: index, containerWidth: containerWidth)
+        let availableH = max(30.0, containerHeight - itemH)
+        let anchorY = min(0.85, max(0.0, targetTopOffset / availableH))
         return UnitPoint(x: 0.5, y: anchorY)
     }
 }

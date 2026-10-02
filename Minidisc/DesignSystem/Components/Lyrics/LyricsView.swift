@@ -39,6 +39,7 @@ struct LyricsView: View {
     @ViewBuilder
     private func loadedContent(_ structured: StructuredLyrics) -> some View {
         GeometryReader { geo in
+            let contentWidth = geo.size.width - MinidiscSpacing.l * 2
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 22) {
@@ -55,13 +56,13 @@ struct LyricsView: View {
                         }
                     }
                     .padding(.horizontal, MinidiscSpacing.l)
-                    .padding(.top, 56)
+                    .padding(.top, 62)
                     .padding(.bottom, max(750, geo.size.height * 0.90))
                 }
                 .scrollIndicators(.hidden)
                 .onAppear {
                     if let currentIndex = viewModel.currentLineIndex {
-                        proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height))
+                        proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height, containerWidth: contentWidth, lines: structured.line))
                     }
                 }
                 .task {
@@ -69,7 +70,7 @@ struct LyricsView: View {
                     guard !Task.isCancelled, !viewModel.isUserScrolling else { return }
                     if let currentIndex = viewModel.currentLineIndex {
                         withAnimation(.easeInOut(duration: 0.3)) {
-                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height))
+                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height, containerWidth: contentWidth, lines: structured.line))
                         }
                     }
                 }
@@ -78,7 +79,7 @@ struct LyricsView: View {
                           !viewModel.isUserScrolling,
                           let newIndex else { return }
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        proxy.scrollTo(newIndex, anchor: lyricsAnchor(for: newIndex, in: geo.size.height))
+                        proxy.scrollTo(newIndex, anchor: lyricsAnchor(for: newIndex, in: geo.size.height, containerWidth: contentWidth, lines: structured.line))
                     }
                 }
                 .onChange(of: viewModel.isUserScrolling) { _, isScrolling in
@@ -86,7 +87,7 @@ struct LyricsView: View {
                           !isScrolling,
                           let currentIndex = viewModel.currentLineIndex else { return }
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height))
+                        proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height, containerWidth: contentWidth, lines: structured.line))
                     }
                 }
                 .onChange(of: areControlsHidden) { _, _ in
@@ -94,7 +95,7 @@ struct LyricsView: View {
                           !viewModel.isUserScrolling,
                           let currentIndex = viewModel.currentLineIndex else { return }
                     withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                        proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height))
+                        proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height, containerWidth: contentWidth, lines: structured.line))
                     }
                 }
                 .onChange(of: geo.size.height) { _, newHeight in
@@ -102,7 +103,7 @@ struct LyricsView: View {
                           !viewModel.isUserScrolling,
                           let currentIndex = viewModel.currentLineIndex else { return }
                     withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                        proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: newHeight))
+                        proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: newHeight, containerWidth: contentWidth, lines: structured.line))
                     }
                 }
                 .onScrollPhaseChange { _, newPhase in
@@ -120,10 +121,25 @@ struct LyricsView: View {
         }
     }
 
-    private func lyricsAnchor(for index: Int?, in containerHeight: CGFloat) -> UnitPoint {
+    private func estimatedHeight(for index: Int?, containerWidth: CGFloat, lines: [StructuredLyricsLine]) -> CGFloat {
+        guard let index, index >= 0, index < lines.count else { return 42.0 }
+        let text = lines[index].value
+        let charsPerLine = max(10.0, containerWidth / 17.5)
+        let sublines = text.components(separatedBy: "\n")
+        var rows = 0.0
+        for sub in sublines {
+            let count = max(1, sub.count)
+            rows += max(1.0, ceil(Double(count) / charsPerLine))
+        }
+        return max(1.0, rows) * 42.0
+    }
+
+    private func lyricsAnchor(for index: Int?, in containerHeight: CGFloat, containerWidth: CGFloat, lines: [StructuredLyricsLine]) -> UnitPoint {
         let fullHeight = areControlsHidden ? containerHeight : (containerHeight + 270.0)
         let targetTopOffset = 0.090 * fullHeight
-        let anchorY = targetTopOffset / max(1.0, containerHeight)
+        let itemH = estimatedHeight(for: index, containerWidth: containerWidth, lines: lines)
+        let availableH = max(30.0, containerHeight - itemH)
+        let anchorY = min(0.85, max(0.0, targetTopOffset / availableH))
         return UnitPoint(x: 0.5, y: anchorY)
     }
 

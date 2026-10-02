@@ -188,7 +188,16 @@ struct FullPlayerView: View {
             ))
             .environment(\.colorScheme, .dark)
             .environment(\.minidiscPlayingAccent, MinidiscColors.accent)
-            .onChange(of: showLyrics) { _, isShowing in
+            .onAppear {
+                if showLyrics {
+                    areLyricsControlsHidden = false
+                    startInactivityTimer()
+                }
+            }
+            .onDisappear {
+                lyricsInactivityTask?.cancel()
+            }
+            .onChange(of: showLyrics, initial: true) { _, isShowing in
                 if isShowing {
                     areLyricsControlsHidden = false
                     startInactivityTimer()
