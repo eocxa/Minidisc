@@ -243,7 +243,7 @@ struct TTMLWordUnitView: View {
 
 // MARK: - Karaoke Configuration Helper
 
-private func karaokeConfig(isLineActive: Bool, dimOpacity: Double = 0.22, litColor: Color = .white) -> KaraokeConfiguration {
+private func karaokeConfig(isLineActive: Bool, dimOpacity: Double = 0.45, litColor: Color = .white) -> KaraokeConfiguration {
     var config = KaraokeConfiguration.standard
     config.litColor = litColor
     config.feather = 6.0
@@ -251,6 +251,8 @@ private func karaokeConfig(isLineActive: Bool, dimOpacity: Double = 0.22, litCol
     config.bounceHeight = 0.0
     config.bounceScale = 0.0
     if !isLineActive {
+        config.dimColor = .white
+    } else {
         config.dimColor = Color.white.opacity(dimOpacity)
     }
     return config
@@ -432,27 +434,17 @@ struct TTMLLyricsLineView: View {
         if isLineActive { return 0 }
         guard !activeIndices.isEmpty else { return 0 }
         switch distance {
-        case 1: return 0.5
-        case 2: return 1.0
-        default: return 2.0
+        case 1: return 2.4
+        case 2: return 4.0
+        default: return 5.5
         }
     }
 
     private var opacity: Double {
         if isUserScrolling {
-            return isLineActive ? 1.0 : 0.58
+            return isLineActive ? 1.0 : 0.88
         }
-        if isLineActive { return 1.0 }
-        guard let minActive = activeIndices.min() else { return 1.0 }
-        if index < minActive {
-            return distance == 1 ? 0.40 : 0.25
-        }
-        switch distance {
-        case 1: return 0.60
-        case 2: return 0.45
-        case 3: return 0.35
-        default: return 0.28
-        }
+        return isLineActive ? 1.0 : 0.92
     }
 
     private var scale: CGFloat {
@@ -558,13 +550,13 @@ struct TTMLLyricsView: View {
                         }
                     }
                     .padding(.horizontal, MinidiscSpacing.l)
-                    .padding(.top, 92)
+                    .padding(.top, 64)
                     .padding(.bottom, 220)
                 }
                 .scrollIndicators(.hidden)
                 .onAppear {
                     if let currentIndex = viewModel.currentLineIndex {
-                        let anchor = UnitPoint(x: 0.5, y: 0.18)
+                        let anchor = UnitPoint(x: 0.5, y: 0.125)
                         proxy.scrollTo(currentIndex, anchor: anchor)
                     }
                 }
@@ -573,7 +565,7 @@ struct TTMLLyricsView: View {
                           !viewModel.isUserScrolling,
                           let newIndex else { return }
                     withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
-                        let anchor = UnitPoint(x: 0.5, y: 0.18)
+                        let anchor = UnitPoint(x: 0.5, y: 0.125)
                         proxy.scrollTo(newIndex, anchor: anchor)
                     }
                 }

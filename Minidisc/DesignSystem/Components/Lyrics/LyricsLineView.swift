@@ -17,20 +17,15 @@ struct LyricsLineView: View {
         guard isSynced, currentIndex != nil else { return 0 }
         switch distance {
         case 0: return 0
-        case 1: return 1.5
-        case 2: return 3.5
-        default: return 6
+        case 1: return 2.4
+        case 2: return 4.0
+        default: return 5.5
         }
     }
 
     private var opacity: Double {
         guard isSynced, currentIndex != nil else { return 1.0 }
-        switch distance {
-        case 0: return 1.0
-        case 1: return 0.7
-        case 2: return 0.4
-        default: return 0.25
-        }
+        return distance == 0 ? 1.0 : 0.92
     }
 
     private var scale: CGFloat {
