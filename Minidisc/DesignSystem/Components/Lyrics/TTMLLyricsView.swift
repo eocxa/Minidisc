@@ -127,7 +127,7 @@ struct ThreeDotsView: View {
 
 // MARK: - Wrapping Flow Layout for Karaoke Words
 
-private struct TrailingSpaceKey: LayoutValueKey {
+private nonisolated struct TrailingSpaceKey: LayoutValueKey {
     static let defaultValue: CGFloat = 0
 }
 
