@@ -41,7 +41,7 @@ final class LyricsViewModel {
             return reported
         }
         let delta = date.timeIntervalSince(lastPositionUpdateTime)
-        if delta >= 0 && delta <= 0.15 {
+        if delta >= 0 && delta <= 1.0 {
             return reported + delta
         }
         return reported
@@ -101,7 +101,7 @@ final class LyricsViewModel {
                 activeServerBaseURL: activeServerBaseURL
             ), !nowLocalLyrics.lyrics.isEmpty {
                 state = .loadedTTML(nowLocalLyrics)
-                currentLineIndex = nil
+                update(elapsedMs: Int(interpolatedPosition() * 1000))
                 reconcileTracking()
                 return
             }
@@ -226,6 +226,7 @@ final class LyricsViewModel {
         maxInterpolatedPosition = seconds
         lastRecordedPosition = seconds
         lastPositionUpdateTime = Date()
+        update(elapsedMs: Int(seconds * 1000))
         Task { [weak self] in
             await self?.playerService.seek(to: seconds)
         }
@@ -292,6 +293,8 @@ final class LyricsViewModel {
         if !visible {
             resumeTask?.cancel()
             resumeTask = nil
+        } else {
+            update(elapsedMs: Int(interpolatedPosition() * 1000))
         }
         reconcileTracking()
     }

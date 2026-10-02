@@ -40,7 +40,7 @@ struct FullPlayerView: View {
 
     @State private var vm = FullPlayerViewModel()
     @State private var playlistAddition = PlaylistAddition()
-    @State private var showLyrics = false
+    @AppStorage("minidisc_player_show_lyrics") private var showLyrics = false
     @State private var surface: PlayerSurface = .player
     @State private var lyricsViewModel: LyricsViewModel?
     @State private var trackSwipe = TrackSwipeInteraction()
@@ -117,6 +117,7 @@ struct FullPlayerView: View {
                         playerState: playerState,
                         activeServerBaseURL: container?.serverState.activeServer?.baseURL
                     )
+                    newVM.setVisible(true)
                     lyricsViewModel = newVM
                     await newVM.load()
                 }
@@ -442,6 +443,7 @@ struct FullPlayerView: View {
 
             if let lyricsVM = lyricsViewModel {
                 LyricsView(viewModel: lyricsVM)
+                    .id(ObjectIdentifier(lyricsVM))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(.horizontal, 0)
                     .mask(

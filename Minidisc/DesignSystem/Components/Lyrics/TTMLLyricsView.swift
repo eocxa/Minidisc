@@ -425,6 +425,7 @@ struct TTMLLyricsLineView: View {
     let nextLineTime: Double?
     let hasMultiArtist: Bool
     let hasWordSync: Bool
+    let containerWidth: CGFloat
     let isUserScrolling: Bool
     let onSeek: () -> Void
 
@@ -496,6 +497,7 @@ struct TTMLLyricsLineView: View {
                     isUserScrolling: isUserScrolling,
                     nextLineTime: nextLineTime
                 )
+                .frame(maxWidth: hasMultiArtist ? containerWidth * 0.75 : .infinity, alignment: isV2 ? .trailing : .leading)
                 .frame(maxWidth: .infinity, alignment: isV2 ? .trailing : .leading)
                 .padding(.leading, (hasMultiArtist && isV2) ? 24 : 0)
                 .padding(.trailing, (hasMultiArtist && !isV2) ? 24 : 0)
@@ -532,6 +534,7 @@ struct TTMLLyricsView: View {
             let currentTime = viewModel.interpolatedPosition(at: timeline.date)
 
             GeometryReader { geo in
+                let contentWidth = geo.size.width - MinidiscSpacing.l * 2
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 22) {
@@ -542,26 +545,21 @@ struct TTMLLyricsView: View {
                                 if !isDot || (isActive && !viewModel.isUserScrolling) {
                                     let nextLineTime = (index + 1 < lyricsResponse.lyrics.count) ? lyricsResponse.lyrics[index + 1].time : nil
 
-                                    VStack(alignment: .leading, spacing: 0) {
-                                        Color.clear
-                                            .frame(width: 1, height: 1)
-                                            .id("anchor_\(index)")
-
-                                        TTMLLyricsLineView(
-                                            line: line,
-                                            index: index,
-                                            activeIndices: viewModel.activeLineIndices,
-                                            currentIndex: viewModel.currentLineIndex,
-                                            currentTime: currentTime,
-                                            nextLineTime: nextLineTime,
-                                            hasMultiArtist: hasMultiArtist,
-                                            hasWordSync: hasWordSync,
-                                            isUserScrolling: viewModel.isUserScrolling,
-                                            onSeek: {
-                                                viewModel.userTapped(seconds: line.time)
-                                            }
-                                        )
-                                    }
+                                    TTMLLyricsLineView(
+                                        line: line,
+                                        index: index,
+                                        activeIndices: viewModel.activeLineIndices,
+                                        currentIndex: viewModel.currentLineIndex,
+                                        currentTime: currentTime,
+                                        nextLineTime: nextLineTime,
+                                        hasMultiArtist: hasMultiArtist,
+                                        hasWordSync: hasWordSync,
+                                        containerWidth: contentWidth,
+                                        isUserScrolling: viewModel.isUserScrolling,
+                                        onSeek: {
+                                            viewModel.userTapped(seconds: line.time)
+                                        }
+                                    )
                                     .id(index)
                                 }
                             }
@@ -583,7 +581,16 @@ struct TTMLLyricsView: View {
                     .scrollIndicators(.hidden)
                     .onAppear {
                         if let currentIndex = viewModel.currentLineIndex {
-                            proxy.scrollTo("anchor_\(currentIndex)", anchor: lyricsAnchor(for: currentIndex))
+                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex))
+                        }
+                    }
+                    .task {
+                        try? await Task.sleep(for: .milliseconds(60))
+                        guard !Task.isCancelled, !viewModel.isUserScrolling else { return }
+                        if let currentIndex = viewModel.currentLineIndex {
+                            withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
+                                proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex))
+                            }
                         }
                     }
                     .onChange(of: viewModel.currentLineIndex) { _, newIndex in
@@ -591,12 +598,20 @@ struct TTMLLyricsView: View {
                               !viewModel.isUserScrolling,
                               let newIndex else { return }
                         withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
-                            proxy.scrollTo("anchor_\(newIndex)", anchor: lyricsAnchor(for: newIndex))
+                            proxy.scrollTo(newIndex, anchor: lyricsAnchor(for: newIndex))
+                        }
+                    }
+                    .onChange(of: viewModel.isUserScrolling) { _, isScrolling in
+                        guard viewModel.autoScrollEnabled,
+                              !isScrolling,
+                              let currentIndex = viewModel.currentLineIndex else { return }
+                        withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
+                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex))
                         }
                     }
                     .onScrollPhaseChange { _, newPhase in
                         switch newPhase {
-                        case .interacting:
+                        case .interacting, .tracking:
                             viewModel.userStartedScrolling()
                         case .decelerating, .idle:
                             guard viewModel.isUserScrolling else { return }
@@ -611,13 +626,6 @@ struct TTMLLyricsView: View {
     }
 
     private func lyricsAnchor(for index: Int?) -> UnitPoint {
-        guard let index, index > 0 else {
-            return UnitPoint(x: 0.5, y: 0.090)
-        }
-        let hasPrecedingText = lyricsResponse.lyrics[0..<index].contains { $0.text != "…" && $0.text != "..." }
-        if !hasPrecedingText {
-            return UnitPoint(x: 0.5, y: 0.090)
-        }
-        return UnitPoint(x: 0.5, y: 0.060)
+        UnitPoint(x: 0.5, y: 0.090)
     }
 }
