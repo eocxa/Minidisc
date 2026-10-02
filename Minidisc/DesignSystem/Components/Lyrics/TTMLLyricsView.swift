@@ -549,7 +549,7 @@ struct TTMLLyricsView: View {
                         }
                     }
                     .padding(.horizontal, MinidiscSpacing.l)
-                    .padding(.top, 52)
+                    .padding(.top, 56)
                     .padding(.bottom, 220)
                 }
                 .scrollIndicators(.hidden)
@@ -589,6 +589,6 @@ struct TTMLLyricsView: View {
         if !hasPrecedingText {
             return UnitPoint(x: 0.5, y: 0.118)
         }
-        return UnitPoint(x: 0.5, y: 0.080)
+        return UnitPoint(x: 0.5, y: 0.096)
     }
 }

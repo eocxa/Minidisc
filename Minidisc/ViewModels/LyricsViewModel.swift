@@ -1,21 +1,5 @@
 import SwiftUI
 import SwiftSonic
-#if canImport(AVFAudio)
-import AVFAudio
-
-private func currentAudioOutputLatency() -> TimeInterval {
-    let session = AVAudioSession.sharedInstance()
-    let hardwareLatency = session.outputLatency
-    let bufferLatency = session.ioBufferDuration
-    let pipelineLatency: TimeInterval = 0.08
-    let total = hardwareLatency + bufferLatency + pipelineLatency
-    return max(0.15, min(total, 1.5))
-}
-#else
-private func currentAudioOutputLatency() -> TimeInterval {
-    return 0.15
-}
-#endif
 
 @Observable
 @MainActor
@@ -47,31 +31,20 @@ final class LyricsViewModel {
     func interpolatedPosition(at date: Date = Date()) -> Double {
         guard isPlaying else {
             maxInterpolatedPosition = playerState.position
+            lastRecordedPosition = playerState.position
             return playerState.position
         }
         let reported = playerState.position
-        if abs(reported - lastRecordedPosition) > 0.05 {
-            if abs(reported - lastRecordedPosition) > 0.4 || reported < lastRecordedPosition - 0.3 {
-                maxInterpolatedPosition = reported
-            }
+        if abs(reported - lastRecordedPosition) > 0.02 {
             lastRecordedPosition = reported
             lastPositionUpdateTime = date
+            return reported
         }
         let delta = date.timeIntervalSince(lastPositionUpdateTime)
-        let raw = (delta >= 0 && delta <= 3.0) ? (lastRecordedPosition + delta) : reported
-        let pos: Double
-        if raw >= maxInterpolatedPosition {
-            maxInterpolatedPosition = raw
-            pos = raw
-        } else if maxInterpolatedPosition - raw < 0.25 {
-            pos = maxInterpolatedPosition
-        } else {
-            maxInterpolatedPosition = raw
-            pos = raw
+        if delta >= 0 && delta <= 0.15 {
+            return reported + delta
         }
-
-        let latency = currentAudioOutputLatency()
-        return max(0, pos - latency)
+        return reported
     }
 
     private var lyricsList: LyricsList?
@@ -339,7 +312,7 @@ final class LyricsViewModel {
         trackingTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 do {
-                    try await Task.sleep(for: .milliseconds(50))
+                    try await Task.sleep(for: .milliseconds(30))
                 } catch {
                     return
                 }
