@@ -37,27 +37,32 @@ struct LyricsView: View {
     // MARK: - Loaded
 
     @ViewBuilder
+    private func lyricsLinesStack(_ lines: [Line], isSynced: Bool) -> some View {
+        LazyVStack(alignment: .leading, spacing: 22) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                LyricsLineView(
+                    value: line.value,
+                    index: index,
+                    currentIndex: viewModel.currentLineIndex,
+                    isSynced: isSynced,
+                    isTappable: isSynced && line.start != nil,
+                    onTap: { viewModel.userTapped(lineIndex: index) }
+                )
+                .id(index)
+            }
+        }
+    }
+
+    @ViewBuilder
     private func loadedContent(_ structured: StructuredLyrics) -> some View {
         GeometryReader { geo in
             let contentWidth = geo.size.width - MinidiscSpacing.l * 2
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 22) {
-                        ForEach(Array(structured.line.enumerated()), id: \.offset) { index, line in
-                            LyricsLineView(
-                                value: line.value,
-                                index: index,
-                                currentIndex: viewModel.currentLineIndex,
-                                isSynced: structured.synced,
-                                isTappable: structured.synced && line.start != nil,
-                                onTap: { viewModel.userTapped(lineIndex: index) }
-                            )
-                            .id(index)
-                        }
-                    }
-                    .padding(.horizontal, MinidiscSpacing.l)
-                    .padding(.top, 62)
-                    .padding(.bottom, max(750, geo.size.height * 0.90))
+                    lyricsLinesStack(structured.line, isSynced: structured.synced)
+                        .padding(.horizontal, MinidiscSpacing.l)
+                        .padding(.top, 62)
+                        .padding(.bottom, max(750, geo.size.height * 0.90))
                 }
                 .scrollIndicators(.hidden)
                 .onAppear {
@@ -121,7 +126,7 @@ struct LyricsView: View {
         }
     }
 
-    private func estimatedHeight(for index: Int?, containerWidth: CGFloat, lines: [StructuredLyricsLine]) -> CGFloat {
+    private func estimatedHeight(for index: Int?, containerWidth: CGFloat, lines: [Line]) -> CGFloat {
         guard let index, index >= 0, index < lines.count else { return 42.0 }
         let text = lines[index].value
         let charsPerLine = max(10.0, containerWidth / 17.5)
@@ -134,7 +139,7 @@ struct LyricsView: View {
         return max(1.0, rows) * 42.0
     }
 
-    private func lyricsAnchor(for index: Int?, in containerHeight: CGFloat, containerWidth: CGFloat, lines: [StructuredLyricsLine]) -> UnitPoint {
+    private func lyricsAnchor(for index: Int?, in containerHeight: CGFloat, containerWidth: CGFloat, lines: [Line]) -> UnitPoint {
         let fullHeight = areControlsHidden ? containerHeight : (containerHeight + 270.0)
         let targetTopOffset = 0.090 * fullHeight
         let itemH = estimatedHeight(for: index, containerWidth: containerWidth, lines: lines)
