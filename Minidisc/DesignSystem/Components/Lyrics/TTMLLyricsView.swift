@@ -127,6 +127,10 @@ struct ThreeDotsView: View {
 
 // MARK: - Wrapping Flow Layout for Karaoke Words
 
+private struct TrailingSpaceKey: LayoutValueKey {
+    static let defaultValue: CGFloat = 0
+}
+
 struct LyricsFlowLayout: Layout {
     var horizontalAlignment: HorizontalAlignment = .leading
     var verticalSpacing: CGFloat = 2
@@ -168,7 +172,10 @@ struct LyricsFlowLayout: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let rows = computeRows(proposal: proposal, subviews: subviews)
         let totalHeight = rows.reduce(CGFloat(0)) { $0 + $1.height } + CGFloat(max(0, rows.count - 1)) * verticalSpacing
-        let maxWidth = rows.reduce(CGFloat(0)) { max($0, $1.width) }
+        let maxWidth = rows.reduce(CGFloat(0)) { rowMax, row in
+            let trailingSpace = (horizontalAlignment == .trailing) ? (row.subviews.last?[TrailingSpaceKey.self] ?? 0) : 0
+            return max(rowMax, row.width - trailingSpace)
+        }
         return CGSize(width: proposal.width ?? maxWidth, height: totalHeight)
     }
 
@@ -179,7 +186,8 @@ struct LyricsFlowLayout: Layout {
         for row in rows {
             var x: CGFloat = bounds.minX
             if horizontalAlignment == .trailing {
-                x = bounds.maxX - row.width
+                let trailingSpace = row.subviews.last?[TrailingSpaceKey.self] ?? 0
+                x = bounds.maxX - row.width + trailingSpace
             }
 
             for (subview, size) in zip(row.subviews, row.sizes) {
@@ -227,6 +235,14 @@ struct TTMLWordUnitView: View {
     let isLineActive: Bool
     var font: Font = .system(size: 34, weight: .bold)
 
+    private var trailingSpaceWidth: CGFloat {
+        guard let lastWord = words.last,
+              lastWord.text.hasSuffix(" ") || lastWord.text.hasSuffix("\t") else {
+            return 0
+        }
+        return font == .system(size: 20, weight: .bold) ? 5.2 : 8.8
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             ForEach(Array(words.enumerated()), id: \.offset) { _, w in
@@ -238,6 +254,7 @@ struct TTMLWordUnitView: View {
                 )
             }
         }
+        .layoutValue(key: TrailingSpaceKey.self, value: trailingSpaceWidth)
     }
 }
 
@@ -520,6 +537,7 @@ struct TTMLLyricsLineView: View {
 struct TTMLLyricsView: View {
     @Bindable var viewModel: LyricsViewModel
     let lyricsResponse: NowLocalLyricsResponse
+    var areControlsHidden: Bool = false
 
     private var hasMultiArtist: Bool {
         lyricsResponse.lyrics.contains { $0.agent == "v2" }
@@ -565,6 +583,10 @@ struct TTMLLyricsView: View {
                             }
 
                             if let composer = lyricsResponse.composer, !composer.isEmpty {
+                                let lastTextIndex = lyricsResponse.lyrics.lastIndex(where: { $0.text != "…" && $0.text != "..." }) ?? (lyricsResponse.lyrics.count - 1)
+                                let isLastVerse = (viewModel.currentLineIndex ?? -1) >= lastTextIndex
+                                let composerBlur: CGFloat = (viewModel.isUserScrolling || isLastVerse) ? 0 : 5.0
+
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("\(Text("Compositores: ").foregroundColor(.white.opacity(0.45))) \(Text(composer).foregroundColor(.white.opacity(0.65)).bold())")
                                         .font(.system(size: 14))
@@ -572,6 +594,8 @@ struct TTMLLyricsView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.top, 28)
                                 .padding(.bottom, 40)
+                                .blur(radius: composerBlur)
+                                .animation(.spring(response: 0.45, dampingFraction: 0.85), value: composerBlur)
                             }
                         }
                         .padding(.horizontal, MinidiscSpacing.l)
@@ -581,7 +605,7 @@ struct TTMLLyricsView: View {
                     .scrollIndicators(.hidden)
                     .onAppear {
                         if let currentIndex = viewModel.currentLineIndex {
-                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex))
+                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height))
                         }
                     }
                     .task {
@@ -589,7 +613,7 @@ struct TTMLLyricsView: View {
                         guard !Task.isCancelled, !viewModel.isUserScrolling else { return }
                         if let currentIndex = viewModel.currentLineIndex {
                             withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
-                                proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex))
+                                proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height))
                             }
                         }
                     }
@@ -598,7 +622,7 @@ struct TTMLLyricsView: View {
                               !viewModel.isUserScrolling,
                               let newIndex else { return }
                         withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
-                            proxy.scrollTo(newIndex, anchor: lyricsAnchor(for: newIndex))
+                            proxy.scrollTo(newIndex, anchor: lyricsAnchor(for: newIndex, in: geo.size.height))
                         }
                     }
                     .onChange(of: viewModel.isUserScrolling) { _, isScrolling in
@@ -606,7 +630,23 @@ struct TTMLLyricsView: View {
                               !isScrolling,
                               let currentIndex = viewModel.currentLineIndex else { return }
                         withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
-                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex))
+                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height))
+                        }
+                    }
+                    .onChange(of: areControlsHidden) { _, _ in
+                        guard viewModel.autoScrollEnabled,
+                              !viewModel.isUserScrolling,
+                              let currentIndex = viewModel.currentLineIndex else { return }
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height))
+                        }
+                    }
+                    .onChange(of: geo.size.height) { _, newHeight in
+                        guard viewModel.autoScrollEnabled,
+                              !viewModel.isUserScrolling,
+                              let currentIndex = viewModel.currentLineIndex else { return }
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: newHeight))
                         }
                     }
                     .onScrollPhaseChange { _, newPhase in
@@ -625,7 +665,10 @@ struct TTMLLyricsView: View {
         }
     }
 
-    private func lyricsAnchor(for index: Int?) -> UnitPoint {
-        UnitPoint(x: 0.5, y: 0.090)
+    private func lyricsAnchor(for index: Int?, in containerHeight: CGFloat) -> UnitPoint {
+        let fullHeight = areControlsHidden ? containerHeight : (containerHeight + 270.0)
+        let targetTopOffset = 0.090 * fullHeight
+        let anchorY = targetTopOffset / max(1.0, containerHeight)
+        return UnitPoint(x: 0.5, y: anchorY)
     }
 }

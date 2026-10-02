@@ -3,6 +3,7 @@ import SwiftSonic
 
 struct LyricsView: View {
     @Bindable var viewModel: LyricsViewModel
+    var areControlsHidden: Bool = false
 
     var body: some View {
         Group {
@@ -12,7 +13,7 @@ struct LyricsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             case .loadedTTML(let ttml):
-                TTMLLyricsView(viewModel: viewModel, lyricsResponse: ttml)
+                TTMLLyricsView(viewModel: viewModel, lyricsResponse: ttml, areControlsHidden: areControlsHidden)
 
             case .loaded(let structured):
                 loadedContent(structured)
@@ -60,7 +61,7 @@ struct LyricsView: View {
                 .scrollIndicators(.hidden)
                 .onAppear {
                     if let currentIndex = viewModel.currentLineIndex {
-                        proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex))
+                        proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height))
                     }
                 }
                 .task {
@@ -68,7 +69,7 @@ struct LyricsView: View {
                     guard !Task.isCancelled, !viewModel.isUserScrolling else { return }
                     if let currentIndex = viewModel.currentLineIndex {
                         withAnimation(.easeInOut(duration: 0.3)) {
-                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex))
+                            proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height))
                         }
                     }
                 }
@@ -77,7 +78,7 @@ struct LyricsView: View {
                           !viewModel.isUserScrolling,
                           let newIndex else { return }
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        proxy.scrollTo(newIndex, anchor: lyricsAnchor(for: newIndex))
+                        proxy.scrollTo(newIndex, anchor: lyricsAnchor(for: newIndex, in: geo.size.height))
                     }
                 }
                 .onChange(of: viewModel.isUserScrolling) { _, isScrolling in
@@ -85,7 +86,23 @@ struct LyricsView: View {
                           !isScrolling,
                           let currentIndex = viewModel.currentLineIndex else { return }
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex))
+                        proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height))
+                    }
+                }
+                .onChange(of: areControlsHidden) { _, _ in
+                    guard viewModel.autoScrollEnabled,
+                          !viewModel.isUserScrolling,
+                          let currentIndex = viewModel.currentLineIndex else { return }
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                        proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height))
+                    }
+                }
+                .onChange(of: geo.size.height) { _, newHeight in
+                    guard viewModel.autoScrollEnabled,
+                          !viewModel.isUserScrolling,
+                          let currentIndex = viewModel.currentLineIndex else { return }
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                        proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: newHeight))
                     }
                 }
                 .onScrollPhaseChange { _, newPhase in
@@ -103,8 +120,11 @@ struct LyricsView: View {
         }
     }
 
-    private func lyricsAnchor(for index: Int?) -> UnitPoint {
-        UnitPoint(x: 0.5, y: 0.090)
+    private func lyricsAnchor(for index: Int?, in containerHeight: CGFloat) -> UnitPoint {
+        let fullHeight = areControlsHidden ? containerHeight : (containerHeight + 270.0)
+        let targetTopOffset = 0.090 * fullHeight
+        let anchorY = targetTopOffset / max(1.0, containerHeight)
+        return UnitPoint(x: 0.5, y: anchorY)
     }
 
 

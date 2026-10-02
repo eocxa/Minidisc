@@ -442,7 +442,7 @@ struct FullPlayerView: View {
             .padding(.top, MinidiscSpacing.s)
 
             if let lyricsVM = lyricsViewModel {
-                LyricsView(viewModel: lyricsVM)
+                LyricsView(viewModel: lyricsVM, areControlsHidden: areLyricsControlsHidden)
                     .id(ObjectIdentifier(lyricsVM))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(.horizontal, 0)
