@@ -10,7 +10,7 @@ struct MotionArtworkView: View {
     var aspectRatio: CGFloat? = 1
     var onReady: (() -> Void)? = nil
 
-    @State private var isVideoReady = false
+    @State private var isVideoReady: Bool
 
     init(
         videoURL: URL?,
@@ -28,6 +28,8 @@ struct MotionArtworkView: View {
         self.isPaused = isPaused
         self.aspectRatio = aspectRatio
         self.onReady = onReady
+        let isCached = videoURL.flatMap { MotionArtworkCache.shared.cachedURL(for: $0) } != nil
+        _isVideoReady = State(initialValue: isCached)
     }
 
     var body: some View {
@@ -58,12 +60,13 @@ struct MotionArtworkView: View {
             // Capa de video animado en bucle si existe URL
             if let videoURL {
                 LoopingVideoPlayerRepresentable(videoURL: videoURL, isPaused: isPaused, onReady: {
-                    withAnimation(.easeInOut(duration: 0.35)) {
-                        isVideoReady = true
+                    if !isVideoReady {
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            isVideoReady = true
+                        }
                     }
                     onReady?()
                 })
-                .id(videoURL)
                 .opacity(isVideoReady ? 1.0 : 0.0)
             }
         }
@@ -144,10 +147,18 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
         }
 
         func setup(url: URL, in view: PlayerContainerUIView) {
+            let effectiveURL = MotionArtworkCache.shared.cachedURL(for: url) ?? url
+            if let currentURL {
+                let currentEffective = MotionArtworkCache.shared.cachedURL(for: currentURL) ?? currentURL
+                if currentEffective == effectiveURL && player != nil {
+                    self.currentURL = url
+                    return
+                }
+            }
+
             currentURL = url
             cleanCurrentItem()
 
-            let effectiveURL = MotionArtworkCache.shared.cachedURL(for: url) ?? url
             if !url.isFileURL && effectiveURL == url {
                 Task {
                     _ = try? await MotionArtworkCache.shared.loadOrDownload(for: url)

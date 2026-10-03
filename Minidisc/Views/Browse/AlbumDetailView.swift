@@ -42,7 +42,10 @@ struct AlbumDetailView: View {
         self.zoomNamespace = zoomNamespace
         self.mode = mode
         _dominantColor = State(initialValue: initialDominantColor)
-        _enrichment = State(initialValue: NowLocalService.shared.cachedEnrichment(album: album.name, artist: album.artist))
+        let initialEnrichment = NowLocalService.shared.cachedEnrichment(album: album.name, artist: album.artist)
+        _enrichment = State(initialValue: initialEnrichment)
+        let hasCachedVideo = initialEnrichment?.animatedTallUrl != nil || initialEnrichment?.animatedSquareUrl != nil
+        _isMotionVideoReady = State(initialValue: hasCachedVideo)
     }
 
     init(albumId: String, albumName: String, zoomSourceId: String? = nil, zoomNamespace: Namespace.ID? = nil, coverArtId: String? = nil, initialDominantColor: Color = .clear, initialCoverImage: PlatformImage? = nil, mode: AlbumDetailMode = .full) {
@@ -60,7 +63,10 @@ struct AlbumDetailView: View {
         self.zoomNamespace = zoomNamespace
         self.mode = mode
         _dominantColor = State(initialValue: initialDominantColor)
-        _enrichment = State(initialValue: NowLocalService.shared.cachedEnrichment(album: albumName, artist: nil))
+        let initialEnrichment = NowLocalService.shared.cachedEnrichment(album: albumName, artist: nil)
+        _enrichment = State(initialValue: initialEnrichment)
+        let hasCachedVideo = initialEnrichment?.animatedTallUrl != nil || initialEnrichment?.animatedSquareUrl != nil
+        _isMotionVideoReady = State(initialValue: hasCachedVideo)
     }
 
     @Environment(\.appContainer) private var container
@@ -112,7 +118,7 @@ struct AlbumDetailView: View {
     }
 
     private var hasAnimatedCover: Bool {
-        hasTallAnimatedCover
+        resolvedAnimatedCoverURL != nil
     }
 
     private var isAlbumFavorite: Bool { !albumFavoriteMatches.isEmpty }
@@ -239,7 +245,7 @@ struct AlbumDetailView: View {
     }
 
     private var topScrollEdges: Edge.Set {
-        hasAnimatedCover ? .top : []
+        hasTallAnimatedCover ? .top : []
     }
 
     private var enrichmentKey: String {
@@ -276,7 +282,7 @@ struct AlbumDetailView: View {
                 }
             }
         }
-        .contentMargins(.top, hasAnimated ? 0 : 0, for: .scrollContent)
+        .contentMargins(.top, hasTallAnimatedCover ? 0 : 0, for: .scrollContent)
         .ignoresSafeArea(.all, edges: topScrollEdges)
         .toolbarBackground(.hidden, for: .navigationBar)
         .refreshable { await viewModel?.load() }
@@ -501,7 +507,8 @@ struct AlbumDetailView: View {
             coverArtId: viewModel?.coverArtId ?? coverArtId ?? albumId,
             coverImage: effectiveInitialImage,
             albumName: viewModel?.albumName ?? initialName,
-            animatedURL: resolvedAnimatedTallURL,
+            animatedURL: resolvedAnimatedCoverURL,
+            isTall: hasTallAnimatedCover,
             isVideoReady: isMotionVideoReady,
             onVideoReady: {
                 withAnimation(.easeInOut(duration: 0.35)) {
@@ -509,7 +516,7 @@ struct AlbumDetailView: View {
                 }
             }
         )
-        .padding(.top, hasAnimatedCover ? 0 : MinidiscSpacing.xxl)
+        .padding(.top, hasTallAnimatedCover ? 0 : MinidiscSpacing.xxl)
         .zIndex(1)
 
         AlbumMetadataSection(
@@ -523,7 +530,7 @@ struct AlbumDetailView: View {
             isLossless: effectiveEnrichment?.isLossless ?? false,
             isAtmos: effectiveEnrichment?.isAtmos ?? false
         )
-        .padding(.top, hasAnimatedCover ? MinidiscSpacing.s : MinidiscSpacing.xl)
+        .padding(.top, hasTallAnimatedCover ? MinidiscSpacing.s : MinidiscSpacing.xl)
         .zIndex(2)
     }
 
@@ -719,41 +726,59 @@ struct AlbumArtworkSection: View {
     let coverImage: PlatformImage?
     let albumName: String
     var animatedURL: URL? = nil
+    var isTall: Bool = true
     var isVideoReady: Bool = false
     var onVideoReady: (() -> Void)? = nil
 
     var body: some View {
         Group {
             if let animatedURL {
-                GeometryReader { geo in
-                    let width = geo.size.width
-                    let tallHeight = width * 4.0 / 3.0
+                if isTall {
+                    GeometryReader { geo in
+                        let width = geo.size.width
+                        let tallHeight = width * 4.0 / 3.0
 
+                        MotionArtworkView(
+                            videoURL: animatedURL,
+                            fallbackId: coverArtId,
+                            fallbackImage: coverImage,
+                            cornerRadius: 0,
+                            aspectRatio: nil,
+                            onReady: onVideoReady
+                        )
+                        .frame(width: width, height: tallHeight)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .mask {
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .black, location: 0),
+                                    .init(color: .black, location: 2.0 / 3.0),
+                                    .init(color: .clear, location: 1.0)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        }
+                        .shadow(color: .clear, radius: 0, y: 0)
+                    }
+                    .frame(height: 440)
+                    .id(animatedURL)
+                } else {
                     MotionArtworkView(
                         videoURL: animatedURL,
                         fallbackId: coverArtId,
                         fallbackImage: coverImage,
-                        cornerRadius: 0,
-                        aspectRatio: nil,
+                        cornerRadius: MinidiscCornerRadius.large,
+                        aspectRatio: 1,
                         onReady: onVideoReady
                     )
-                    .frame(width: width, height: tallHeight)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .mask {
-                        LinearGradient(
-                            stops: [
-                                .init(color: .black, location: 0),
-                                .init(color: .black, location: 2.0 / 3.0),
-                                .init(color: .clear, location: 1.0)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    }
-                    .shadow(color: .clear, radius: 0, y: 0)
+                    .aspectRatio(1, contentMode: .fit)
+                    .frame(maxWidth: 340)
+                    .minidiscCoverStyle(cornerRadius: MinidiscCornerRadius.large)
+                    .shadow(color: .black.opacity(0.16), radius: 12, y: 6)
+                    .padding(.horizontal, 64)
+                    .id(animatedURL)
                 }
-                .frame(height: 440)
-                .id(animatedURL)
             } else {
                 CoverArtView(
                     id: coverArtId,

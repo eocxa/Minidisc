@@ -14,14 +14,26 @@ actor MotionArtworkCache {
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
     }
 
+    private static func cacheKey(for remoteURL: URL) -> String {
+        if let components = URLComponents(url: remoteURL, resolvingAgainstBaseURL: false) {
+            let artType = remoteURL.path.contains("square") ? "square" : (remoteURL.path.contains("tall") ? "tall" : "video")
+            if let v = components.queryItems?.first(where: { $0.name == "v" })?.value, !v.isEmpty {
+                return "artwork_\(artType)_\(v)"
+            }
+        }
+        return remoteURL.absoluteString
+    }
+
     private func localFileURL(for remoteURL: URL) -> URL {
-        let hash = SHA256.hash(data: Data(remoteURL.absoluteString.utf8))
+        let key = Self.cacheKey(for: remoteURL)
+        let hash = SHA256.hash(data: Data(key.utf8))
         let filename = hash.compactMap { String(format: "%02x", $0) }.joined() + ".mp4"
         return cacheDirectory.appendingPathComponent(filename)
     }
 
     nonisolated func cachedURL(for remoteURL: URL) -> URL? {
-        let hash = SHA256.hash(data: Data(remoteURL.absoluteString.utf8))
+        let key = Self.cacheKey(for: remoteURL)
+        let hash = SHA256.hash(data: Data(key.utf8))
         let filename = hash.compactMap { String(format: "%02x", $0) }.joined() + ".mp4"
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         let file = caches.appendingPathComponent("app.minidisc/motion_artwork", isDirectory: true).appendingPathComponent(filename)

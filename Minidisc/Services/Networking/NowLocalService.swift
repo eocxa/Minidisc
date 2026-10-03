@@ -152,36 +152,46 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        if !tit.isEmpty {
-            if let exact = cache[trackKey] {
+        func stripLyrics(_ e: NowLocalEnrichment) -> NowLocalEnrichment {
+            NowLocalEnrichment(
+                found: e.found,
+                trackId: nil,
+                title: nil,
+                artist: e.artist,
+                album: e.album,
+                hasAnimatedArtwork: e.hasAnimatedArtwork,
+                animatedSquareUrl: e.animatedSquareUrl,
+                animatedTallUrl: e.animatedTallUrl,
+                isAtmos: e.isAtmos,
+                isLossless: e.isLossless,
+                lyricsUrl: nil,
+                lyricsType: nil
+            )
+        }
+
+        func findAlbumEnrichment() -> NowLocalEnrichment? {
+            if let exact = cache[albumKey] ?? cache[albumOnlyKey] {
                 return exact
             }
-            if let albumEnrichment = cache[albumKey] ?? cache[albumOnlyKey] {
-                return NowLocalEnrichment(
-                    found: albumEnrichment.found,
-                    trackId: nil,
-                    title: nil,
-                    artist: albumEnrichment.artist,
-                    album: albumEnrichment.album,
-                    hasAnimatedArtwork: albumEnrichment.hasAnimatedArtwork,
-                    animatedSquareUrl: albumEnrichment.animatedSquareUrl,
-                    animatedTallUrl: albumEnrichment.animatedTallUrl,
-                    isAtmos: albumEnrichment.isAtmos,
-                    isLossless: albumEnrichment.isLossless,
-                    lyricsUrl: nil,
-                    lyricsType: nil
-                )
+            if !alb.isEmpty {
+                return cache.first(where: { (k, _) in
+                    (k.hasPrefix("\(alb)_") && k.hasSuffix("_")) || k == "\(alb)__"
+                })?.value
             }
             return nil
         }
 
-        if let albumEnrichment = cache[albumKey] {
-            return albumEnrichment
+        if !tit.isEmpty {
+            if let exact = cache[trackKey] {
+                return exact
+            }
+            if let albumEnrichment = findAlbumEnrichment() {
+                return stripLyrics(albumEnrichment)
+            }
+            return nil
         }
-        if let albumOnly = cache[albumOnlyKey] {
-            return albumOnly
-        }
-        return nil
+
+        return findAlbumEnrichment()
     }
 
     nonisolated func store(_ enrichment: NowLocalEnrichment, forKeys keys: [String]) {
@@ -204,6 +214,10 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
                     lyricsType: nil
                 )
                 cache[k.lowercased()] = albumLevel
+                let parts = k.lowercased().split(separator: "_", omittingEmptySubsequences: false)
+                if let first = parts.first, !first.isEmpty {
+                    cache["\(first)__"] = albumLevel
+                }
             } else {
                 cache[k.lowercased()] = enrichment
             }
@@ -352,7 +366,7 @@ actor NowLocalService {
                     }
                 }
                 cache[cacheKey] = effective
-                storeCachedEnrichment(effective, forKeys: [cacheKey, "\(album ?? "")_\(artist ?? "")_"])
+                storeCachedEnrichment(effective, forKeys: [cacheKey, "\(album ?? "")_\(artist ?? "")_", "\(album ?? "")__"])
                 return effective
             }
         } catch {
@@ -470,8 +484,22 @@ actor NowLocalService {
         for base in candidates {
             if let libResult = await performLibraryLookup(base: base, album: album, artist: artist, title: title) {
                 cache[cacheKey] = libResult
-                storeCachedEnrichment(libResult, forKeys: [cacheKey, "\(album ?? "")_\(artist ?? "")_"])
+                storeCachedEnrichment(libResult, forKeys: [cacheKey, "\(album ?? "")_\(artist ?? "")_", "\(album ?? "")__"])
                 return libResult
+            }
+        }
+
+        // For album enrichment, if artist-specific lookup failed, fallback to querying without artist
+        if (title == nil || title?.isEmpty == true), let album, !album.isEmpty, artist != nil && !artist!.isEmpty {
+            let albumOnlyKey = "\(album)__"
+            if let cached = cache[albumOnlyKey] {
+                return cached
+            }
+            for base in candidates {
+                if let result = await performEnrichmentRequest(base: base, album: album, artist: nil, title: nil, cacheKey: albumOnlyKey) {
+                    storeCachedEnrichment(result, forKeys: [albumOnlyKey, "\(album)_\(artist ?? "")_"])
+                    return result
+                }
             }
         }
 
