@@ -47,6 +47,7 @@ struct FullPlayerView: View {
     @State private var currentTrackEnrichment: NowLocalEnrichment?
     @State private var isMotionArtworkReady = false
     @State private var areLyricsControlsHidden = false
+    @State private var showArtistAlbumMenu = false
     @State private var lyricsInactivityTask: Task<Void, Never>?
     @State private var lastActivityTime: Date = Date()
     @Namespace private var morphNS
@@ -198,6 +199,7 @@ struct FullPlayerView: View {
                 lyricsInactivityTask?.cancel()
             }
             .onChange(of: showLyrics, initial: true) { _, isShowing in
+                showArtistAlbumMenu = false
                 if isShowing {
                     areLyricsControlsHidden = false
                     startInactivityTimer()
@@ -207,14 +209,23 @@ struct FullPlayerView: View {
                 }
             }
             .onChange(of: surface) { _, newSurface in
+                showArtistAlbumMenu = false
                 if newSurface == .queue {
                     lyricsInactivityTask?.cancel()
                     areLyricsControlsHidden = false
                 }
             }
             .onChange(of: playerState.currentTrack?.id) { _, _ in
+                showArtistAlbumMenu = false
                 if showLyrics {
                     userDidInteract()
+                }
+            }
+            .onChange(of: showArtistAlbumMenu) { _, isOpen in
+                if isOpen {
+                    lyricsInactivityTask?.cancel()
+                } else if showLyrics {
+                    startInactivityTimer()
                 }
             }
             .onChange(of: lyricsViewModel?.isUserScrolling) { _, isScrolling in
@@ -267,9 +278,11 @@ struct FullPlayerView: View {
                         container: container,
                         contentColor: vm.contentColor,
                         secondaryContentColor: vm.secondaryContentColor,
-                        trackSwipe: trackSwipe
+                        trackSwipe: trackSwipe,
+                        showArtistAlbumMenu: $showArtistAlbumMenu
                     )
                     .padding(.horizontal, Self.playerHorizontalPadding)
+                    .zIndex(showArtistAlbumMenu ? 100 : 1)
                 }
 
                 if !showLyrics || !areLyricsControlsHidden {
@@ -444,11 +457,13 @@ struct FullPlayerView: View {
                     container: container,
                     contentColor: vm.contentColor,
                     secondaryContentColor: vm.secondaryContentColor,
-                    compact: true
+                    compact: true,
+                    showArtistAlbumMenu: $showArtistAlbumMenu
                 )
             }
             .padding(.horizontal, MinidiscSpacing.l)
             .padding(.top, MinidiscSpacing.s)
+            .zIndex(showArtistAlbumMenu ? 100 : 1)
 
             if let lyricsVM = lyricsViewModel {
                 LyricsView(viewModel: lyricsVM, areControlsHidden: areLyricsControlsHidden)
@@ -493,11 +508,13 @@ struct FullPlayerView: View {
                     container: container,
                     contentColor: vm.contentColor,
                     secondaryContentColor: vm.secondaryContentColor,
-                    compact: true
+                    compact: true,
+                    showArtistAlbumMenu: $showArtistAlbumMenu
                 )
             }
             .padding(.horizontal, MinidiscSpacing.l)
             .padding(.top, MinidiscSpacing.s)
+            .zIndex(showArtistAlbumMenu ? 100 : 1)
 
             queuePills(playerState)
                 .padding(.horizontal, MinidiscSpacing.l)
@@ -518,6 +535,11 @@ struct FullPlayerView: View {
     // MARK: - Lyrics Inactivity Timer
 
     private func userDidInteract() {
+        if showArtistAlbumMenu {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                showArtistAlbumMenu = false
+            }
+        }
         guard showLyrics else {
             if areLyricsControlsHidden { areLyricsControlsHidden = false }
             lyricsInactivityTask?.cancel()
@@ -537,10 +559,10 @@ struct FullPlayerView: View {
 
     private func startInactivityTimer() {
         lyricsInactivityTask?.cancel()
-        guard showLyrics else { return }
+        guard showLyrics, !showArtistAlbumMenu else { return }
         lyricsInactivityTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 5_000_000_000)
-            guard !Task.isCancelled, showLyrics else { return }
+            guard !Task.isCancelled, showLyrics, !showArtistAlbumMenu else { return }
             withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
                 areLyricsControlsHidden = true
             }
@@ -617,6 +639,7 @@ private struct TrackInfoSection: View {
     let secondaryContentColor: Color
     var compact: Bool = false
     var trackSwipe: TrackSwipeInteraction?
+    @Binding var showArtistAlbumMenu: Bool
 
     @Query private var favoriteMatches: [FavoriteRecord]
     @Environment(PlaylistAddition.self) private var playlistAddition
@@ -631,7 +654,8 @@ private struct TrackInfoSection: View {
         contentColor: Color,
         secondaryContentColor: Color,
         compact: Bool = false,
-        trackSwipe: TrackSwipeInteraction? = nil
+        trackSwipe: TrackSwipeInteraction? = nil,
+        showArtistAlbumMenu: Binding<Bool> = .constant(false)
     ) {
         self.playerState = playerState
         self.container = container
@@ -639,6 +663,7 @@ private struct TrackInfoSection: View {
         self.secondaryContentColor = secondaryContentColor
         self.compact = compact
         self.trackSwipe = trackSwipe
+        self._showArtistAlbumMenu = showArtistAlbumMenu
         let cid = "song:\(playerState.currentTrack?.id ?? "")"
         _favoriteMatches = Query(filter: #Predicate<FavoriteRecord> { $0.id == cid })
     }
@@ -651,6 +676,44 @@ private struct TrackInfoSection: View {
             trackMetadata
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
+            .overlay(alignment: compact ? .bottomLeading : .topLeading) {
+                if showArtistAlbumMenu {
+                    ZStack(alignment: compact ? .bottomLeading : .topLeading) {
+                        Color.black.opacity(0.001)
+                            .frame(width: 2500, height: 2500)
+                            .position(x: 0, y: 0)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                                    showArtistAlbumMenu = false
+                                }
+                            }
+
+                        PlayerArtistQuickMenu(
+                            albumName: playerState.currentTrack?.albumName?.isEmpty == false ? playerState.currentTrack!.albumName! : "Unknown Album",
+                            artistName: playerState.currentTrack?.artist?.isEmpty == false ? playerState.currentTrack!.artist! : "Unknown Artist",
+                            onSelectAlbum: {
+                                goToAlbum()
+                            },
+                            onSelectArtist: {
+                                goToArtist()
+                            }
+                        )
+                        .alignmentGuide(compact ? .bottom : .top) { d in
+                            compact ? -8 : (d.height + 12)
+                        }
+                        .transition(
+                            .asymmetric(
+                                insertion: .scale(scale: 0.85, anchor: compact ? .topLeading : .bottomLeading)
+                                    .combined(with: .opacity),
+                                removal: .scale(scale: 0.85, anchor: compact ? .topLeading : .bottomLeading)
+                                    .combined(with: .opacity)
+                            )
+                        )
+                    }
+                }
+            }
+            .zIndex(showArtistAlbumMenu ? 100 : 0)
 
             HStack(spacing: MinidiscSpacing.s) {
                 if !playerState.isLiveStream {
@@ -695,15 +758,14 @@ private struct TrackInfoSection: View {
 
                         Divider()
                         Button {
-                            guard playerState.currentTrack?.albumId != nil else { return }
-                            showAlbumSheet = true
+                            goToAlbum()
                         } label: {
                             Label("Go to Album", systemImage: "music.note.square.stack")
                             if let albumName = playerState.currentTrack?.albumName, !albumName.isEmpty {
                                 Text(albumName)
                             }
                         }
-                        .disabled(playerState.currentTrack?.albumId == nil || !isOnline)
+                        .disabled(playerState.currentTrack?.albumName == nil || !isOnline)
                         Button {
                             goToArtist()
                         } label: {
@@ -755,6 +817,13 @@ private struct TrackInfoSection: View {
                 .tint(.primary)
                 .accessibilityLabel("More options")
             }
+        }
+        .zIndex(showArtistAlbumMenu ? 100 : 0)
+        .onChange(of: playerState.currentTrack?.id) { _, _ in
+            showArtistAlbumMenu = false
+        }
+        .onChange(of: compact) { _, _ in
+            showArtistAlbumMenu = false
         }
         .sheet(isPresented: $showAlbumSheet) {
             if let track = playerState.currentTrack,
@@ -842,12 +911,15 @@ private struct TrackInfoSection: View {
         if let artist = song?.artist {
             if isCurrent {
                 Button {
-                    goToArtist()
+                    HapticFeedback.light.trigger()
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                        showArtistAlbumMenu.toggle()
+                    }
                 } label: {
                     artistLabel(artist, usesMarquee: !compact)
                 }
                 .buttonStyle(.plain)
-                .disabled(!isOnline)
+                .disabled(!isOnline && song?.isLocalFile != true)
             } else {
                 artistLabel(artist, usesMarquee: false)
             }
@@ -907,6 +979,7 @@ private struct TrackInfoSection: View {
     }
 
     private func goToArtist() {
+        showArtistAlbumMenu = false
         guard let track = playerState.currentTrack else { return }
         if track.artistId != nil {
             postNavigateToArtist(track: track)
@@ -918,6 +991,30 @@ private struct TrackInfoSection: View {
                   let result = try? await c.libraryService.search(name),
                   let found = result.artist?.first else { return }
             postNavigateToArtist(artistId: found.id, artistName: found.name, coverArtId: found.coverArt)
+        }
+    }
+
+    private func goToAlbum() {
+        showArtistAlbumMenu = false
+        guard let track = playerState.currentTrack else { return }
+        if track.albumId != nil {
+            postNavigateToAlbum(track: track)
+            return
+        }
+        guard let name = track.albumName, !name.isEmpty else { return }
+        Task {
+            guard let c = container,
+                  let result = try? await c.libraryService.search(name),
+                  let found = result.album?.first else { return }
+            NotificationCenter.default.post(
+                name: .minidiscNavigateToAlbum,
+                object: nil,
+                userInfo: [
+                    "albumId":   found.id,
+                    "albumName": found.name,
+                    "coverArtId": found.coverArt as Any
+                ]
+            )
         }
     }
 
@@ -1268,5 +1365,117 @@ private struct VolumeSection: View {
                 .frame(width: 20)
                 .accessibilityHidden(true)
         }
+    }
+}
+
+// MARK: - Artist & Album Quick Jump Menu (Liquid Glass Bubble)
+
+private struct PlayerArtistQuickMenu: View {
+    let albumName: String
+    let artistName: String
+    let onSelectAlbum: () -> Void
+    let onSelectArtist: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Opción Superior ("Go to Album")
+            Button {
+                HapticFeedback.light.trigger()
+                onSelectAlbum()
+            } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: "square.stack")
+                        .font(.system(size: 20, weight: .regular))
+                        .foregroundStyle(.white)
+                        .frame(width: 26, height: 26)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(String(localized: "Go to Album"))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Text(albumName)
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(Color(white: 0.68))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(QuickMenuRowButtonStyle())
+
+            // Separador
+            Rectangle()
+                .fill(Color.white.opacity(0.14))
+                .frame(height: 0.5)
+                .padding(.leading, 56)
+                .padding(.trailing, 16)
+
+            // Opción Inferior ("Go to Artist")
+            Button {
+                HapticFeedback.light.trigger()
+                onSelectArtist()
+            } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: "mic")
+                        .font(.system(size: 20, weight: .regular))
+                        .foregroundStyle(.white)
+                        .frame(width: 26, height: 26)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(String(localized: "Go to Artist"))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Text(artistName)
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(Color(white: 0.68))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(QuickMenuRowButtonStyle())
+        }
+        .frame(width: 260)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.black.opacity(0.38))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: Color.white.opacity(0.35), location: 0),
+                                    .init(color: Color.white.opacity(0.12), location: 0.35),
+                                    .init(color: Color.white.opacity(0.04), location: 1.0)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.75
+                        )
+                )
+                .shadow(color: Color.black.opacity(0.4), radius: 24, x: 0, y: 12)
+        }
+    }
+}
+
+private struct QuickMenuRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? Color.white.opacity(0.12) : Color.clear)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }

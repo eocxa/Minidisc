@@ -119,6 +119,14 @@ struct MainTabView: View {
             guard container?.serverState.isOnline == true else { return }
             try? await container?.favoritesService.syncFromServer()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .minidiscNavigateToAlbum)) { note in
+            guard let id   = note.userInfo?["albumId"]   as? String,
+                  let name = note.userInfo?["albumName"] as? String else { return }
+            let coverArtId = note.userInfo?["coverArtId"] as? String
+            playerPresentation.reset()
+            selectedTab = .home
+            homePath.append(HomeDestination.albumById(id: id, name: name, subtitle: "", coverArtId: coverArtId))
+        }
         .onReceive(NotificationCenter.default.publisher(for: .minidiscNavigateToArtist)) { note in
             guard let id   = note.userInfo?["artistId"]   as? String,
                   let name = note.userInfo?["artistName"] as? String else { return }
