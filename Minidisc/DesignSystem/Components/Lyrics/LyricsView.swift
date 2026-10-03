@@ -140,8 +140,7 @@ struct LyricsView: View {
     }
 
     private func lyricsAnchor(for index: Int?, in containerHeight: CGFloat, containerWidth: CGFloat, lines: [Line]) -> UnitPoint {
-        let fullHeight = areControlsHidden ? containerHeight : (containerHeight + 270.0)
-        let targetTopOffset = 0.090 * fullHeight
+        let targetTopOffset = 0.12 * containerHeight
         let itemH = estimatedHeight(for: index, containerWidth: containerWidth, lines: lines)
         let availableH = max(30.0, containerHeight - itemH)
         let anchorY = min(0.85, max(0.0, targetTopOffset / availableH))

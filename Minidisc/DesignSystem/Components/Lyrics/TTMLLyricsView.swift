@@ -350,18 +350,10 @@ struct TTMLLineContentView: View {
                 }
             }
         } else {
-            let start = line.main?.time ?? line.time
-            let end = line.main?.endTime ?? line.endTime ?? nextLineTime.map { min($0, start + 6.0) } ?? (start + 3.0)
-
             if isLineActive {
                 Text(line.main?.text ?? line.text)
                     .font(.system(size: 34, weight: .bold))
-                    .karaoke(
-                        time: currentTime,
-                        start: start,
-                        end: end,
-                        configuration: karaokeConfig(isLineActive: true)
-                    )
+                    .foregroundStyle(Color.white)
                     .multilineTextAlignment(isV2 ? .trailing : .leading)
             } else {
                 Text(line.main?.text ?? line.text)
@@ -389,22 +381,10 @@ struct TTMLLineContentView: View {
                 .opacity(0.85)
                 .transition(.opacity.combined(with: .offset(y: isAdlibBefore ? -4 : 4)))
             } else if let adlibText = adlib.text, !adlibText.isEmpty {
-                let aStart = adlib.time ?? line.time
-                let aEnd = adlib.endTime ?? line.endTime ?? (aStart + 2.5)
-
                 if isLineActive {
                     Text(adlibText)
                         .font(.system(size: 20, weight: .bold))
-                        .karaoke(
-                            time: currentTime,
-                            start: aStart,
-                            end: aEnd,
-                            configuration: karaokeConfig(
-                                isLineActive: true,
-                                dimOpacity: 0.18,
-                                litColor: Color.white.opacity(0.85)
-                            )
-                        )
+                        .foregroundStyle(Color.white.opacity(0.85))
                         .multilineTextAlignment(isV2 ? .trailing : .leading)
                         .transition(.opacity.combined(with: .offset(y: isAdlibBefore ? -4 : 4)))
                 } else {
@@ -544,7 +524,7 @@ struct TTMLLyricsView: View {
     }
 
     private var hasWordSync: Bool {
-        lyricsResponse.hasWordSync ?? true
+        lyricsResponse.hasWordSync ?? (lyricsResponse.lyrics.contains { ($0.words?.isEmpty == false) || ($0.main?.words?.isEmpty == false) })
     }
 
     var body: some View {
@@ -696,8 +676,7 @@ struct TTMLLyricsView: View {
     }
 
     private func lyricsAnchor(for index: Int?, in containerHeight: CGFloat, containerWidth: CGFloat) -> UnitPoint {
-        let fullHeight = areControlsHidden ? containerHeight : (containerHeight + 270.0)
-        let targetTopOffset = 0.090 * fullHeight
+        let targetTopOffset = 0.12 * containerHeight
         let itemH = estimatedHeight(for: index, containerWidth: containerWidth)
         let availableH = max(30.0, containerHeight - itemH)
         let anchorY = min(0.85, max(0.0, targetTopOffset / availableH))

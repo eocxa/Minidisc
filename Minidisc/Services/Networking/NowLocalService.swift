@@ -90,17 +90,20 @@ nonisolated struct NowLocalLyricsResponse: Sendable, Codable, Equatable {
     }
 }
 
-actor NowLocalService {
-    static let shared = NowLocalService()
-    private static let enrichmentMemoryCacheLock = NSLock()
-    private static var enrichmentMemoryCache: [String: NowLocalEnrichment] = loadEnrichmentCacheFromDisk()
+private final class EnrichmentCacheStorage: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cache: [String: NowLocalEnrichment]
 
-    private static var enrichmentCacheFileURL: URL? {
+    init() {
+        self.cache = Self.loadFromDisk()
+    }
+
+    private static var cacheFileURL: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("nowlocal_enrichment_cache.json")
     }
 
-    private static func loadEnrichmentCacheFromDisk() -> [String: NowLocalEnrichment] {
-        guard let url = enrichmentCacheFileURL,
+    private static func loadFromDisk() -> [String: NowLocalEnrichment] {
+        guard let url = cacheFileURL,
               let data = try? Data(contentsOf: url),
               let decoded = try? JSONDecoder().decode([String: NowLocalEnrichment].self, from: data) else {
             return [:]
@@ -108,20 +111,16 @@ actor NowLocalService {
         return decoded
     }
 
-    private static func saveEnrichmentCacheToDisk(_ cache: [String: NowLocalEnrichment]) {
-        guard let url = enrichmentCacheFileURL else { return }
+    private func saveToDisk(_ snapshot: [String: NowLocalEnrichment]) {
+        guard let url = Self.cacheFileURL else { return }
         Task.detached(priority: .background) {
-            if let data = try? JSONEncoder().encode(cache) {
+            if let data = try? JSONEncoder().encode(snapshot) {
                 try? data.write(to: url, options: [.atomic])
             }
         }
     }
 
-    private var cache: [String: NowLocalEnrichment] = [:]
-    private var lyricsCache: [String: NowLocalLyricsResponse] = [:]
-    private let logger = Logger(subsystem: "app.minidisc.nowlocal", category: "Enrichment")
-
-    nonisolated func cachedEnrichment(album: String?, artist: String?, title: String? = nil) -> NowLocalEnrichment? {
+    func get(album: String?, artist: String?, title: String? = nil) -> NowLocalEnrichment? {
         let alb = (album ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let art = (artist ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let tit = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -129,29 +128,46 @@ actor NowLocalService {
         let albumKey = "\(alb)_\(art)_"
         let albumOnlyKey = "\(alb)__"
 
-        Self.enrichmentMemoryCacheLock.lock()
-        defer { Self.enrichmentMemoryCacheLock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
 
-        if !tit.isEmpty, let exact = Self.enrichmentMemoryCache[trackKey] {
+        if !tit.isEmpty, let exact = cache[trackKey] {
             return exact
         }
-        if let albumEnrichment = Self.enrichmentMemoryCache[albumKey] {
+        if let albumEnrichment = cache[albumKey] {
             return albumEnrichment
         }
-        if let albumOnly = Self.enrichmentMemoryCache[albumOnlyKey] {
+        if let albumOnly = cache[albumOnlyKey] {
             return albumOnly
         }
         return nil
     }
 
-    nonisolated func storeCachedEnrichment(_ enrichment: NowLocalEnrichment, forKeys keys: [String]) {
-        Self.enrichmentMemoryCacheLock.lock()
+    func store(_ enrichment: NowLocalEnrichment, forKeys keys: [String]) {
+        lock.lock()
         for k in keys {
-            Self.enrichmentMemoryCache[k.lowercased()] = enrichment
+            cache[k.lowercased()] = enrichment
         }
-        let snapshot = Self.enrichmentMemoryCache
-        Self.enrichmentMemoryCacheLock.unlock()
-        Self.saveEnrichmentCacheToDisk(snapshot)
+        let snapshot = cache
+        lock.unlock()
+        saveToDisk(snapshot)
+    }
+}
+
+actor NowLocalService {
+    static let shared = NowLocalService()
+    private static let storage = EnrichmentCacheStorage()
+
+    private var cache: [String: NowLocalEnrichment] = [:]
+    private var lyricsCache: [String: NowLocalLyricsResponse] = [:]
+    private let logger = Logger(subsystem: "app.minidisc.nowlocal", category: "Enrichment")
+
+    nonisolated func cachedEnrichment(album: String?, artist: String?, title: String? = nil) -> NowLocalEnrichment? {
+        Self.storage.get(album: album, artist: artist, title: title)
+    }
+
+    nonisolated func storeCachedEnrichment(_ enrichment: NowLocalEnrichment, forKeys keys: [String]) {
+        Self.storage.store(enrichment, forKeys: keys)
     }
 
     nonisolated func resolveCandidateBaseURLs(activeServerBaseURL: String?) -> [URL] {
