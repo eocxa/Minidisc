@@ -57,9 +57,33 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/Payload"
           cp -R "$RUNNER_TEMP/Minidisc.xcarchive/Products/Applications/Minidisc.app" "$RUNNER_TEMP/Payload/"
+          cat << 'EOF' > "$RUNNER_TEMP/iTunesMetadata.plist"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+          	<key>genre</key>
+          	<string>Music</string>
+          	<key>genreId</key>
+          	<integer>6011</integer>
+          	<key>primaryGenreName</key>
+          	<string>Music</string>
+          	<key>primaryGenreId</key>
+          	<integer>6011</integer>
+          	<key>itemName</key>
+          	<string>Minidisc</string>
+          	<key>playlistName</key>
+          	<string>Minidisc</string>
+          	<key>softwareVersionBundleId</key>
+          	<string>com.nohitdev.minidisc</string>
+          </dict>
+          </plist>
+          EOF
+          cp "$RUNNER_TEMP/iTunesMetadata.plist" "$RUNNER_TEMP/Payload/Minidisc.app/iTunesMetadata.plist"
           cd "$RUNNER_TEMP"
-          zip -qry "$GITHUB_WORKSPACE/Minidisc.ipa" Payload
+          zip -qry "$GITHUB_WORKSPACE/Minidisc.ipa" Payload iTunesMetadata.plist
           ls -lh "$GITHUB_WORKSPACE/Minidisc.ipa"
+
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4

@@ -40,6 +40,8 @@
 		<string>audio</string>
 		<string>processing</string>
 	</array>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.music</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 </dict>
