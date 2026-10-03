@@ -676,7 +676,8 @@ struct TTMLLyricsView: View {
     }
 
     private func lyricsAnchor(for index: Int?, in containerHeight: CGFloat, containerWidth: CGFloat) -> UnitPoint {
-        let targetTopOffset = 0.12 * containerHeight
+        let fullHeight = areControlsHidden ? containerHeight : (containerHeight + 270.0)
+        let targetTopOffset = 0.090 * fullHeight
         let itemH = estimatedHeight(for: index, containerWidth: containerWidth)
         let availableH = max(30.0, containerHeight - itemH)
         let anchorY = min(0.85, max(0.0, targetTopOffset / availableH))

@@ -295,7 +295,7 @@ struct FullPlayerView: View {
                     .padding(.horizontal, Self.playerHorizontalPadding)
                 }
 
-                if !showLyrics {
+                if !showLyrics || !areLyricsControlsHidden {
                     VStack(spacing: 0) {
                         if !playerState.isLiveStream {
                             ScrubberView(
@@ -327,17 +327,20 @@ struct FullPlayerView: View {
                                 .padding(.top, Self.playerControlsSpacing)
                         }
 
-                        flowGap(showingQueue ? 24 : 40)
+                        flowGap(isCompact ? 24 : 40)
                     }
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
+                } else if showLyrics && areLyricsControlsHidden {
+                    flowGap(16)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .animation(.spring(response: 0.45, dampingFraction: 0.82), value: showLyrics)
             .animation(.spring(response: 0.45, dampingFraction: 0.82), value: surface)
+            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: areLyricsControlsHidden)
             .animation(.easeInOut(duration: 0.4), value: hasMotionCanvas)
 
-            if !showLyrics {
+            if !showLyrics || !areLyricsControlsHidden {
                 BottomToolbar(
                     showLyrics: $showLyrics,
                     surface: $surface,
@@ -355,64 +358,14 @@ struct FullPlayerView: View {
             topBar
         }
         .overlay(alignment: .bottom) {
-            if showLyrics {
-                VStack(spacing: 0) {
-                    if !playerState.isLiveStream {
-                        ScrubberView(
-                            playerState: playerState,
-                            playerService: container?.playerService,
-                            contentColor: vm.contentColor,
-                            secondaryContentColor: vm.secondaryContentColor,
-                            isLossless: effectiveTrackEnrichment?.isLossless ?? false,
-                            isAtmos: effectiveTrackEnrichment?.isAtmos ?? false
-                        )
-                        .padding(.horizontal, Self.playerHorizontalPadding)
-                        .padding(.top, MinidiscSpacing.m)
-                        .disabled(!playerState.isPlaybackAvailable)
-                        .opacity(playerState.isPlaybackAvailable ? 1.0 : 0.4)
+            if showLyrics && areLyricsControlsHidden {
+                Color.black.opacity(0.001)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 250)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        userDidInteract()
                     }
-
-                    PlaybackControlsView(
-                        playerState: playerState,
-                        playerService: container?.playerService,
-                        isPlaybackAvailable: playerState.isPlaybackAvailable,
-                        keepsPauseIcon: trackSwipe.keepsPauseIcon,
-                        contentColor: vm.contentColor
-                    )
-                    .padding(.top, Self.playerControlsSpacing)
-
-                    if dynamicTypeSize < .accessibility1 {
-                        VolumeSection(contentColor: vm.contentColor, secondaryContentColor: vm.secondaryContentColor)
-                            .padding(.horizontal, Self.playerHorizontalPadding)
-                            .padding(.top, Self.playerControlsSpacing)
-                    }
-
-                    flowGap(24)
-
-                    BottomToolbar(
-                        showLyrics: $showLyrics,
-                        surface: $surface,
-                        isLiveStream: playerState.isLiveStream,
-                        secondaryContentColor: vm.secondaryContentColor,
-                        accentColor: MinidiscColors.accent,
-                        playerState: playerState
-                    )
-                    .padding(.top, MinidiscSpacing.s)
-                    .padding(.bottom, MinidiscSpacing.l)
-                }
-                .opacity(areLyricsControlsHidden ? 0 : 1)
-                .allowsHitTesting(!areLyricsControlsHidden)
-                .animation(.spring(response: 0.45, dampingFraction: 0.82), value: areLyricsControlsHidden)
-                .overlay {
-                    if areLyricsControlsHidden {
-                        Color.black.opacity(0.001)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                userDidInteract()
-                            }
-                    }
-                }
             }
         }
     }
@@ -530,7 +483,7 @@ struct FullPlayerView: View {
                             stops: [
                                 .init(color: .clear, location: 0),
                                 .init(color: .black, location: 0.02),
-                                .init(color: .black, location: 0.98),
+                                .init(color: .black, location: 0.92),
                                 .init(color: .clear, location: 1.0)
                             ],
                             startPoint: .top,

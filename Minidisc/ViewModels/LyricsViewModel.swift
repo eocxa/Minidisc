@@ -96,7 +96,11 @@ final class LyricsViewModel {
             title: track.title,
             activeServerBaseURL: activeServerBaseURL
         ), let lyricsUrl = enrichment.lyricsUrl {
-            if let nowLocalLyrics = await NowLocalService.shared.fetchLyrics(
+            let tTitle = track.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let eTitle = (enrichment.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let isTitleValid = !eTitle.isEmpty && (eTitle == tTitle || eTitle.contains(tTitle) || tTitle.contains(eTitle))
+
+            if isTitleValid, let nowLocalLyrics = await NowLocalService.shared.fetchLyrics(
                 pathOrTrackId: lyricsUrl,
                 activeServerBaseURL: activeServerBaseURL
             ), !nowLocalLyrics.lyrics.isEmpty {
