@@ -845,10 +845,16 @@ private struct AlbumMetadataLine: View {
                 Text(String(year))
             }
             if isLossless {
-                AudioQualityBadge(title: "Lossless")
+                if (genre?.isEmpty == false) || year != nil {
+                    Text("·")
+                }
+                AudioQualityBadge(.lossless, withBackground: false)
             }
             if isAtmos {
-                AudioQualityBadge(title: "Dolby Atmos")
+                if (genre?.isEmpty == false) || year != nil || isLossless {
+                    Text("·")
+                }
+                AudioQualityBadge(.dolbyAtmos, withBackground: false)
             }
         }
         .font(.minidiscCaption)
@@ -856,22 +862,117 @@ private struct AlbumMetadataLine: View {
     }
 }
 
-struct AudioQualityBadge: View {
-    let title: String
+public struct DolbyLogoShape: Shape {
+    public init() {}
 
-    init(title: String) {
-        self.title = title
+    public func path(in rect: CGRect) -> Path {
+        let scaleX = rect.width / 24.0
+        let scaleY = rect.height / 16.704
+        let t = CGAffineTransform(scaleX: scaleX, y: scaleY)
+            .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
+
+        var outer = Path()
+        outer.addRect(CGRect(x: 0, y: 0, width: 24, height: 16.704))
+
+        var right = Path()
+        right.move(to: CGPoint(x: 18.433, y: 2.158))
+        right.addLine(to: CGPoint(x: 21.169, y: 2.158))
+        right.addLine(to: CGPoint(x: 21.169, y: 14.545))
+        right.addLine(to: CGPoint(x: 18.433, y: 14.545))
+        right.addCurve(to: CGPoint(x: 13.219, y: 8.351),
+                       control1: CGPoint(x: 15.594, y: 14.545),
+                       control2: CGPoint(x: 13.219, y: 11.778))
+        right.addCurve(to: CGPoint(x: 18.433, y: 2.158),
+                       control1: CGPoint(x: 13.219, y: 4.924),
+                       control2: CGPoint(x: 15.594, y: 2.158))
+        right.closeSubpath()
+
+        var left = Path()
+        left.move(to: CGPoint(x: 2.831, y: 2.158))
+        left.addLine(to: CGPoint(x: 5.567, y: 2.158))
+        left.addCurve(to: CGPoint(x: 10.781, y: 8.352),
+                      control1: CGPoint(x: 8.406, y: 2.158),
+                      control2: CGPoint(x: 10.781, y: 4.925))
+        left.addCurve(to: CGPoint(x: 5.567, y: 14.546),
+                      control1: CGPoint(x: 10.781, y: 11.779),
+                      control2: CGPoint(x: 8.407, y: 14.546))
+        left.addLine(to: CGPoint(x: 2.831, y: 14.546))
+        left.closeSubpath()
+
+        var combined = Path()
+        combined.addPath(outer)
+        combined.addPath(right)
+        combined.addPath(left)
+
+        return combined.applying(t)
+    }
+}
+
+public struct DolbyLogoView: View {
+    public init() {}
+
+    public var body: some View {
+        DolbyLogoShape()
+            .fill(style: FillStyle(eoFill: true))
+    }
+}
+
+public struct AudioQualityBadge: View {
+    public enum BadgeType {
+        case lossless
+        case dolbyAtmos
     }
 
-    var body: some View {
-        Text(title)
-            .font(.system(size: 10, weight: .bold))
-            .textCase(.none)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
-            .background(Color.white.opacity(0.16))
-            .foregroundStyle(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+    public let type: BadgeType
+    public let title: String
+    public var withBackground: Bool
+
+    public init(_ type: BadgeType, title: String? = nil, withBackground: Bool = true) {
+        self.type = type
+        self.title = title ?? (type == .dolbyAtmos ? "Dolby Atmos" : "Lossless")
+        self.withBackground = withBackground
+    }
+
+    public init(title: String, withBackground: Bool = true) {
+        if title.localizedCaseInsensitiveContains("atmos") || title.localizedCaseInsensitiveContains("dolby") {
+            self.type = .dolbyAtmos
+        } else {
+            self.type = .lossless
+        }
+        self.title = title
+        self.withBackground = withBackground
+    }
+
+    @ViewBuilder
+    public var body: some View {
+        let content = HStack(alignment: .center, spacing: withBackground ? 3.5 : 3.5) {
+            switch type {
+            case .lossless:
+                Image(systemName: "waveform")
+                    .font(.system(size: withBackground ? 9 : 10, weight: .semibold))
+            case .dolbyAtmos:
+                DolbyLogoView()
+                    .frame(
+                        width: withBackground ? 12 : 13,
+                        height: withBackground ? 8.35 : 9.05
+                    )
+            }
+            Text(title)
+                .font(.system(size: withBackground ? 10 : 11, weight: withBackground ? .bold : .semibold))
+                .textCase(.none)
+                .lineLimit(1)
+        }
+
+        if withBackground {
+            content
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2.5)
+                .background(Color.white.opacity(0.18))
+                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        } else {
+            content
+        }
     }
 }
 

@@ -1053,10 +1053,14 @@ private struct ScrubberTimeLabels: View {
                 .foregroundStyle(color)
                 .monospacedDigit()
             Spacer()
-            if isAtmos {
-                AudioQualityBadge(title: "Dolby Atmos")
-            } else if isLossless {
-                AudioQualityBadge(title: "Lossless")
+            HStack(spacing: 8) {
+                if isLossless {
+                    AudioQualityBadge(.lossless, withBackground: true)
+                }
+                if isAtmos {
+                    AudioQualityBadge(.dolbyAtmos, withBackground: false)
+                        .foregroundStyle(color)
+                }
             }
             Spacer()
             Text(
