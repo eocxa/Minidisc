@@ -866,44 +866,39 @@ public struct DolbyLogoShape: Shape {
     public init() {}
 
     public func path(in rect: CGRect) -> Path {
-        let scaleX = rect.width / 24.0
-        let scaleY = rect.height / 16.704
+        let scaleX = rect.width / 18.338
+        let scaleY = rect.height / 12.388
         let t = CGAffineTransform(scaleX: scaleX, y: scaleY)
             .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
 
-        var outer = Path()
-        outer.addRect(CGRect(x: 0, y: 0, width: 24, height: 16.704))
-
-        var right = Path()
-        right.move(to: CGPoint(x: 18.433, y: 2.158))
-        right.addLine(to: CGPoint(x: 21.169, y: 2.158))
-        right.addLine(to: CGPoint(x: 21.169, y: 14.545))
-        right.addLine(to: CGPoint(x: 18.433, y: 14.545))
-        right.addCurve(to: CGPoint(x: 13.219, y: 8.351),
-                       control1: CGPoint(x: 15.594, y: 14.545),
-                       control2: CGPoint(x: 13.219, y: 11.778))
-        right.addCurve(to: CGPoint(x: 18.433, y: 2.158),
-                       control1: CGPoint(x: 13.219, y: 4.924),
-                       control2: CGPoint(x: 15.594, y: 2.158))
-        right.closeSubpath()
-
         var left = Path()
-        left.move(to: CGPoint(x: 2.831, y: 2.158))
-        left.addLine(to: CGPoint(x: 5.567, y: 2.158))
-        left.addCurve(to: CGPoint(x: 10.781, y: 8.352),
-                      control1: CGPoint(x: 8.406, y: 2.158),
-                      control2: CGPoint(x: 10.781, y: 4.925))
-        left.addCurve(to: CGPoint(x: 5.567, y: 14.546),
-                      control1: CGPoint(x: 10.781, y: 11.779),
-                      control2: CGPoint(x: 8.407, y: 14.546))
-        left.addLine(to: CGPoint(x: 2.831, y: 14.546))
+        left.move(to: CGPoint(x: 0, y: 0))
+        left.addLine(to: CGPoint(x: 2.736, y: 0))
+        left.addCurve(to: CGPoint(x: 7.95, y: 6.194),
+                      control1: CGPoint(x: 5.575, y: 0),
+                      control2: CGPoint(x: 7.95, y: 2.767))
+        left.addCurve(to: CGPoint(x: 2.736, y: 12.388),
+                      control1: CGPoint(x: 7.95, y: 9.621),
+                      control2: CGPoint(x: 5.576, y: 12.388))
+        left.addLine(to: CGPoint(x: 0, y: 12.388))
         left.closeSubpath()
 
-        var combined = Path()
-        combined.addPath(outer)
-        combined.addPath(right)
-        combined.addPath(left)
+        var right = Path()
+        right.move(to: CGPoint(x: 15.602, y: 0))
+        right.addLine(to: CGPoint(x: 18.338, y: 0))
+        right.addLine(to: CGPoint(x: 18.338, y: 12.388))
+        right.addLine(to: CGPoint(x: 15.602, y: 12.388))
+        right.addCurve(to: CGPoint(x: 10.388, y: 6.194),
+                       control1: CGPoint(x: 12.763, y: 12.388),
+                       control2: CGPoint(x: 10.388, y: 9.621))
+        right.addCurve(to: CGPoint(x: 15.602, y: 0),
+                       control1: CGPoint(x: 10.388, y: 2.767),
+                       control2: CGPoint(x: 12.763, y: 0))
+        right.closeSubpath()
 
+        var combined = Path()
+        combined.addPath(left)
+        combined.addPath(right)
         return combined.applying(t)
     }
 }
@@ -913,7 +908,18 @@ public struct DolbyLogoView: View {
 
     public var body: some View {
         DolbyLogoShape()
-            .fill(style: FillStyle(eoFill: true))
+            .fill()
+    }
+}
+
+public struct LosslessWaveformView: View {
+    public init() {}
+
+    public var body: some View {
+        Image("AppleLosslessLogo")
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
     }
 }
 
@@ -945,31 +951,34 @@ public struct AudioQualityBadge: View {
 
     @ViewBuilder
     public var body: some View {
-        let content = HStack(alignment: .center, spacing: withBackground ? 3.5 : 3.5) {
+        let content = HStack(alignment: .center, spacing: withBackground ? 4.5 : 3.5) {
             switch type {
             case .lossless:
-                Image(systemName: "waveform")
-                    .font(.system(size: withBackground ? 9 : 10, weight: .semibold))
+                LosslessWaveformView()
+                    .frame(
+                        width: withBackground ? 16 : 14,
+                        height: withBackground ? 9.6 : 8.4
+                    )
             case .dolbyAtmos:
                 DolbyLogoView()
                     .frame(
-                        width: withBackground ? 12 : 13,
-                        height: withBackground ? 8.35 : 9.05
+                        width: withBackground ? 14 : 13,
+                        height: withBackground ? 9.5 : 8.8
                     )
             }
             Text(title)
-                .font(.system(size: withBackground ? 10 : 11, weight: withBackground ? .bold : .semibold))
+                .font(.system(size: withBackground ? 11.5 : 11, weight: withBackground ? .bold : .semibold))
                 .textCase(.none)
                 .lineLimit(1)
         }
 
         if withBackground {
             content
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2.5)
+                .padding(.horizontal, 8.5)
+                .padding(.vertical, 3.5)
                 .background(Color.white.opacity(0.18))
                 .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .clipShape(Capsule())
         } else {
             content
         }

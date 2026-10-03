@@ -1004,7 +1004,7 @@ private struct ScrubberView: View {
     }
 
     var body: some View {
-        VStack(spacing: MinidiscSpacing.xs) {
+        VStack(spacing: 0) {
             ProgressSlider(
                 value: positionBinding,
                 total: effectiveDuration,
@@ -1021,6 +1021,7 @@ private struct ScrubberView: View {
                 },
                 trackColor: contentColor.opacity(0.2),
                 fillColor: contentColor.opacity(0.95),
+                height: 22,
                 isInteracting: isDragging || isSeeking
             )
 
@@ -1032,7 +1033,9 @@ private struct ScrubberView: View {
                 isLossless: isLossless,
                 isAtmos: isAtmos
             )
+            .padding(.top, -2)
         }
+        .padding(.bottom, 12)
     }
 }
 
