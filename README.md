@@ -39,38 +39,52 @@ If you want the largest set of functions on Mac and iPhone, use Cassette. If you
 
 ## Features
 
-**A player that is close to Apple Music**
+**An immersive player experience**
 
-- Native iOS 26 design with Liquid Glass.
-- A full-screen player with a large cover.
-- A mini-player that stays in the tab bar, and you tap it to open the full player.
-- A Home screen with your top picks, your recent music, and one shelf for each genre.
-- Background playback with lock screen and Control Center controls.
-- AirPlay support.
+- Native iOS 26 design with Liquid Glass aesthetics and dynamic background color extraction.
+- Full-screen player with high-resolution artwork and fluid matched-geometry transitions.
+- **Motion Artwork & Animated Canvas**: Full-bleed animated covers (`.mp4`) in the full player and album view with seamless looping, local disk cache, and responsive aspect scaling.
+- A mini-player docked in the tab bar that expands into the full player on tap or swipe.
+- Background playback with lock screen and Control Center integration.
+- AirPlay 2 support.
 
-**Your library**
+**Next-Gen Apple Music-Style Lyrics (TTML & Karaoke)**
+
+- **Word-by-word synchronization**: Syllable-level progressive gradient fill with fluid sweep physics.
+- **Duet & Multi-Artist Layout**: Left alignment for lead vocals (`v1`) and right alignment for secondary artists (`v2`), capped at 75% width for clean spatial separation.
+- **Adlib Vocals**: Background vocal tags rendered dynamically with distinct typography and synchronized timing.
+- **Instrumental Markers**: Three-dot animated pulsing markers for song intros and instrumental solos.
+- **Calibrated Auto-Scroll**: Precise physics-based scroll tracking that keeps active verses at a constant distance from the mini cover across all verse heights (from single lines to 5+ line stanzas).
+- **Auto-Hiding Controls**: Player controls automatically disappear after 5 seconds of inactivity to provide a clean, full-screen lyric canvas, reappearing instantly on user interaction.
+- **Interactive Seeking**: Tap any lyric line to jump playback directly to that timestamp.
+- **Smart Resume**: Temporarily frees scroll lock when browsing lyrics and automatically resumes tracking after 3 seconds of inactivity.
+- **Dynamic Styling**: Passed verses reset to unlit state, inactive lines feature pure uncolored Gaussian blur, and song composer credits are softly revealed at the end of the track.
+- **Multi-source fallback**: Supports local TTML files, synchronized `.lrc`, embedded ID3/MP4 tags, and automatic fallback to [LRCLIB](https://lrclib.net).
+
+**Companion Ecosystem: NowLocal**
+
+- Integrates seamlessly with [**NowLocal**](https://github.com/eocxa/nowlocal), a companion open-source local streaming server and web player.
+- Serves `.ttml` rich lyrics, animated artwork (`.mp4` square and tall), and enrichment metadata directly to Minidisc from your local music collection.
+- Configurable host URL and port in **Settings > Integrations > NowLocal**.
+
+**Your Library & Playback**
 
 - Browse your playlists, artists, albums, downloads, and favorites.
-- Search all of your library.
-- Offline mode, so you can download albums, playlists, or single tracks.
-- Sync your favorites with the server.
-- Lyrics, shuffle, repeat, and a full queue.
-- The app keeps your session and continues from the last position.
+- Full-text search across your entire library.
+- Offline mode: download entire albums, playlists, or individual songs.
+- Two-deck playback engine with gapless playback, true crossfades, and ReplayGain.
+- Interactive drag-and-drop queue reordering with Smart Shuffle and Auto-extend.
+- **Streaming Quality & Data Saver**: Lossless by default, with configurable quality per network (Wi-Fi vs. Cellular) and dedicated Data Saver mode (192 kbps MP3).
+- Instant session persistence that restores your last playback state.
 
-**More functions**
+**Integrations & Privacy**
 
-- **Wrapped** gives you a summary of your year of listening.
-- **ListenBrainz** scrobbles your plays and gets recommendations for you.
-- **AudioMuse-AI** builds weekly mood playlists from the sound of your music.
-- **Lidarr** manages your music collection from the app: add artists, monitor and search for missing albums, pick releases with an interactive search, and follow the download queue with manual import.
-- **Streaming quality** is lossless by default, but you can pick a lighter format per network (Wi-Fi and cellular).
-
-**Privacy**
-
-- Minidisc does not track you. Library and playback traffic goes directly to your configured server.
-- If you select LRCLIB as the lyrics source, or use it as the automatic fallback, Minidisc sends the track title, artist, album, and duration to LRCLIB over HTTPS. Server credentials, custom headers, and server identifiers are never included.
-- Minidisc keeps your credentials only in the iOS Keychain.
-- Minidisc can send custom HTTP headers for a server behind a reverse proxy, for example Cloudflare Access or Authelia.
+- **ListenBrainz**: Scrobble your plays and receive personalized music recommendations.
+- **AudioMuse-AI**: Build weekly mood playlists analyzed from the acoustic profile of your library.
+- **Lidarr**: Manage your music collection directly from the app (add artists, monitor missing albums, interactive search, and manage download queues).
+- **Wrapped**: Annual listening summary and statistics.
+- **Zero Tracking**: All traffic stays strictly between your device and your configured server.
+- **Secure Credentials**: Credentials stored exclusively in the iOS Keychain with optional custom reverse-proxy headers (Cloudflare Access, Authelia).
 
 ## Installation
 
