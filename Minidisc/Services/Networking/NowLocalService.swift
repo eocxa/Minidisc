@@ -90,11 +90,11 @@ nonisolated struct NowLocalLyricsResponse: Sendable, Codable, Equatable {
     }
 }
 
-private final class EnrichmentCacheStorage: @unchecked Sendable {
+private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
     private let lock = NSLock()
     private var cache: [String: NowLocalEnrichment]
 
-    init() {
+    nonisolated init() {
         self.cache = Self.loadFromDisk()
     }
 
@@ -102,7 +102,7 @@ private final class EnrichmentCacheStorage: @unchecked Sendable {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("nowlocal_enrichment_cache.json")
     }
 
-    private static func loadFromDisk() -> [String: NowLocalEnrichment] {
+    nonisolated private static func loadFromDisk() -> [String: NowLocalEnrichment] {
         guard let url = cacheFileURL,
               let data = try? Data(contentsOf: url),
               let decoded = try? JSONDecoder().decode([String: NowLocalEnrichment].self, from: data) else {
@@ -111,7 +111,7 @@ private final class EnrichmentCacheStorage: @unchecked Sendable {
         return decoded
     }
 
-    private func saveToDisk(_ snapshot: [String: NowLocalEnrichment]) {
+    nonisolated private func saveToDisk(_ snapshot: [String: NowLocalEnrichment]) {
         guard let url = Self.cacheFileURL else { return }
         Task.detached(priority: .background) {
             if let data = try? JSONEncoder().encode(snapshot) {
@@ -120,7 +120,7 @@ private final class EnrichmentCacheStorage: @unchecked Sendable {
         }
     }
 
-    func get(album: String?, artist: String?, title: String? = nil) -> NowLocalEnrichment? {
+    nonisolated func get(album: String?, artist: String?, title: String? = nil) -> NowLocalEnrichment? {
         let alb = (album ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let art = (artist ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let tit = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -143,7 +143,7 @@ private final class EnrichmentCacheStorage: @unchecked Sendable {
         return nil
     }
 
-    func store(_ enrichment: NowLocalEnrichment, forKeys keys: [String]) {
+    nonisolated func store(_ enrichment: NowLocalEnrichment, forKeys keys: [String]) {
         lock.lock()
         for k in keys {
             cache[k.lowercased()] = enrichment
@@ -156,7 +156,7 @@ private final class EnrichmentCacheStorage: @unchecked Sendable {
 
 actor NowLocalService {
     static let shared = NowLocalService()
-    private static let storage = EnrichmentCacheStorage()
+    nonisolated private static let storage = EnrichmentCacheStorage()
 
     private var cache: [String: NowLocalEnrichment] = [:]
     private var lyricsCache: [String: NowLocalLyricsResponse] = [:]
