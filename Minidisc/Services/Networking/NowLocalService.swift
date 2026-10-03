@@ -108,7 +108,28 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
               let decoded = try? JSONDecoder().decode([String: NowLocalEnrichment].self, from: data) else {
             return [:]
         }
-        return decoded
+        var sanitized: [String: NowLocalEnrichment] = [:]
+        for (k, v) in decoded {
+            if k.hasSuffix("_") && v.lyricsUrl != nil {
+                sanitized[k] = NowLocalEnrichment(
+                    found: v.found,
+                    trackId: nil,
+                    title: nil,
+                    artist: v.artist,
+                    album: v.album,
+                    hasAnimatedArtwork: v.hasAnimatedArtwork,
+                    animatedSquareUrl: v.animatedSquareUrl,
+                    animatedTallUrl: v.animatedTallUrl,
+                    isAtmos: v.isAtmos,
+                    isLossless: v.isLossless,
+                    lyricsUrl: nil,
+                    lyricsType: nil
+                )
+            } else {
+                sanitized[k] = v
+            }
+        }
+        return sanitized
     }
 
     nonisolated private func saveToDisk(_ snapshot: [String: NowLocalEnrichment]) {
@@ -131,9 +152,29 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        if !tit.isEmpty, let exact = cache[trackKey] {
-            return exact
+        if !tit.isEmpty {
+            if let exact = cache[trackKey] {
+                return exact
+            }
+            if let albumEnrichment = cache[albumKey] ?? cache[albumOnlyKey] {
+                return NowLocalEnrichment(
+                    found: albumEnrichment.found,
+                    trackId: nil,
+                    title: nil,
+                    artist: albumEnrichment.artist,
+                    album: albumEnrichment.album,
+                    hasAnimatedArtwork: albumEnrichment.hasAnimatedArtwork,
+                    animatedSquareUrl: albumEnrichment.animatedSquareUrl,
+                    animatedTallUrl: albumEnrichment.animatedTallUrl,
+                    isAtmos: albumEnrichment.isAtmos,
+                    isLossless: albumEnrichment.isLossless,
+                    lyricsUrl: nil,
+                    lyricsType: nil
+                )
+            }
+            return nil
         }
+
         if let albumEnrichment = cache[albumKey] {
             return albumEnrichment
         }
@@ -146,7 +187,26 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
     nonisolated func store(_ enrichment: NowLocalEnrichment, forKeys keys: [String]) {
         lock.lock()
         for k in keys {
-            cache[k.lowercased()] = enrichment
+            if k.hasSuffix("_") {
+                // Strip song-specific lyrics from album-wide keys so they never leak to other tracks
+                let albumLevel = NowLocalEnrichment(
+                    found: enrichment.found,
+                    trackId: nil,
+                    title: nil,
+                    artist: enrichment.artist,
+                    album: enrichment.album,
+                    hasAnimatedArtwork: enrichment.hasAnimatedArtwork,
+                    animatedSquareUrl: enrichment.animatedSquareUrl,
+                    animatedTallUrl: enrichment.animatedTallUrl,
+                    isAtmos: enrichment.isAtmos,
+                    isLossless: enrichment.isLossless,
+                    lyricsUrl: nil,
+                    lyricsType: nil
+                )
+                cache[k.lowercased()] = albumLevel
+            } else {
+                cache[k.lowercased()] = enrichment
+            }
         }
         let snapshot = cache
         lock.unlock()
@@ -235,6 +295,23 @@ actor NowLocalService {
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private func titlesMatch(_ titleA: String, _ titleB: String) -> Bool {
+        func normalize(_ s: String) -> String {
+            var res = s.lowercased()
+            res = res.replacingOccurrences(of: "^\\d+([\\.\\-\\s])+", with: "", options: .regularExpression)
+            res = res.replacingOccurrences(of: "\\s*\\(.*?\\)", with: "", options: .regularExpression)
+            res = res.replacingOccurrences(of: "\\s*\\[.*?\\]", with: "", options: .regularExpression)
+            res = res.folding(options: .diacriticInsensitive, locale: .current)
+            return res.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let normA = normalize(titleA)
+        let normB = normalize(titleB)
+        if normA.isEmpty || normB.isEmpty { return false }
+        if normA == normB { return true }
+        if normA.contains(normB) || normB.contains(normA) { return true }
+        return false
+    }
+
     private func performEnrichmentRequest(base: URL, album: String?, artist: String?, title: String?, cacheKey: String) async -> NowLocalEnrichment? {
         var components = URLComponents(url: base.appendingPathComponent("api/enrichment"), resolvingAgainstBaseURL: false)
         var queryItems: [URLQueryItem] = []
@@ -253,9 +330,30 @@ actor NowLocalService {
             let decoder = JSONDecoder()
             let enrichment = try decoder.decode(NowLocalEnrichment.self, from: data)
             if enrichment.found {
-                cache[cacheKey] = enrichment
-                storeCachedEnrichment(enrichment, forKeys: [cacheKey, "\(album ?? "")_\(artist ?? "")_"])
-                return enrichment
+                var effective = enrichment
+                if let requestedTitle = title, !requestedTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if !titlesMatch(enrichment.title ?? "", requestedTitle) {
+                        // The server matched the album and returned another track's lyrics!
+                        // Strip lyrics so this song does not copy another song's lyrics
+                        effective = NowLocalEnrichment(
+                            found: enrichment.found,
+                            trackId: nil,
+                            title: nil,
+                            artist: enrichment.artist,
+                            album: enrichment.album,
+                            hasAnimatedArtwork: enrichment.hasAnimatedArtwork,
+                            animatedSquareUrl: enrichment.animatedSquareUrl,
+                            animatedTallUrl: enrichment.animatedTallUrl,
+                            isAtmos: enrichment.isAtmos,
+                            isLossless: enrichment.isLossless,
+                            lyricsUrl: nil,
+                            lyricsType: nil
+                        )
+                    }
+                }
+                cache[cacheKey] = effective
+                storeCachedEnrichment(effective, forKeys: [cacheKey, "\(album ?? "")_\(artist ?? "")_"])
+                return effective
             }
         } catch {
             logger.debug("Enrichment lookup failed for \(cacheKey): \(error.localizedDescription)")
@@ -278,17 +376,19 @@ actor NowLocalService {
             let titQ = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
             var bestTrack: [String: Any]?
+            var exactTitleMatch = false
             for t in tracks {
                 let tAlb = (t["album"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                 let tArt = (t["artist"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                let tTit = (t["title"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                let tTit = t["title"] as? String ?? ""
 
-                if !titQ.isEmpty && tTit == titQ && (artQ.isEmpty || tArt.contains(artQ) || artQ.contains(tArt)) {
+                if !titQ.isEmpty && titlesMatch(tTit, title ?? "") && (artQ.isEmpty || tArt.contains(artQ) || artQ.contains(tArt)) {
                     bestTrack = t
+                    exactTitleMatch = true
                     break
                 }
                 if !albQ.isEmpty && tAlb == albQ && (artQ.isEmpty || tArt.contains(artQ) || artQ.contains(tArt)) {
-                    bestTrack = t
+                    if bestTrack == nil { bestTrack = t }
                     if titQ.isEmpty { break }
                 }
                 if !albQ.isEmpty && tAlb == albQ && bestTrack == nil {
@@ -301,10 +401,12 @@ actor NowLocalService {
             let square = track["animated_square_url"] as? String
             guard tall != nil || square != nil else { return nil }
 
+            let hasLyricsForThisTrack = (exactTitleMatch || titQ.isEmpty) && (track["lyrics_type"] as? String != "none")
+
             return NowLocalEnrichment(
                 found: true,
-                trackId: track["id"] as? String,
-                title: track["title"] as? String,
+                trackId: exactTitleMatch ? (track["id"] as? String) : nil,
+                title: exactTitleMatch ? (track["title"] as? String) : nil,
                 artist: track["artist"] as? String,
                 album: track["album"] as? String,
                 hasAnimatedArtwork: (track["has_animated_artwork"] as? Bool) ?? true,
@@ -312,8 +414,8 @@ actor NowLocalService {
                 animatedTallUrl: tall,
                 isAtmos: track["is_atmos"] as? Bool,
                 isLossless: track["is_lossless"] as? Bool,
-                lyricsUrl: (track["lyrics_type"] as? String != "none") ? "/api/lyrics/\(track["id"] ?? "")" : nil,
-                lyricsType: track["lyrics_type"] as? String
+                lyricsUrl: hasLyricsForThisTrack ? "/api/lyrics/\(track["id"] ?? "")" : nil,
+                lyricsType: hasLyricsForThisTrack ? (track["lyrics_type"] as? String) : nil
             )
         } catch {
             return nil
@@ -330,8 +432,10 @@ actor NowLocalService {
             return cached
         }
         if let fastCached = cachedEnrichment(album: album, artist: artist, title: title) {
-            cache[cacheKey] = fastCached
-            return fastCached
+            if (title == nil || title?.isEmpty == true) || fastCached.title != nil {
+                cache[cacheKey] = fastCached
+                return fastCached
+            }
         }
 
         for base in candidates {
