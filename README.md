@@ -50,7 +50,7 @@ If you want the largest set of functions on Mac and iPhone, use Cassette. If you
 
 **Next-Gen Apple Music-Style Lyrics (TTML & Karaoke)**
 
-- **Word-by-word synchronization**: Syllable-level progressive gradient fill with fluid sweep physics.
+- **Word-by-word synchronization**: Syllable-level progressive gradient fill with fluid sweep physics, inspired by [KaraokeText](https://github.com/WillSuo-Github/KaraokeText).
 - **Duet & Multi-Artist Layout**: Left alignment for lead vocals (`v1`) and right alignment for secondary artists (`v2`), capped at 75% width for clean spatial separation.
 - **Adlib Vocals**: Background vocal tags rendered dynamically with distinct typography and synchronized timing.
 - **Instrumental Markers**: Three-dot animated pulsing markers for song intros and instrumental solos.
@@ -151,6 +151,7 @@ Dependencies: [SwiftSonic](https://github.com/CassetteLab/swiftsonic) (MIT), whi
 ## Acknowledgments
 
 - [Cassette](https://github.com/CassetteLab/cassette) by Mathieu Dubart, because Minidisc is a fork of Cassette.
+- [KaraokeText](https://github.com/WillSuo-Github/KaraokeText) by WillSuo, for the syllable-level karaoke gradient sweep and text animation concepts.
 - The [Navidrome](https://www.navidrome.org) team, because Navidrome is an excellent self-hosted music server.
 - The [OpenSubsonic](https://opensubsonic.netlify.app) community, because they modernized the Subsonic API.
 
