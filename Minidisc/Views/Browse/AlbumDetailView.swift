@@ -42,6 +42,7 @@ struct AlbumDetailView: View {
         self.zoomNamespace = zoomNamespace
         self.mode = mode
         _dominantColor = State(initialValue: initialDominantColor)
+        _enrichment = State(initialValue: NowLocalService.shared.cachedEnrichment(album: album.name, artist: album.artist))
     }
 
     init(albumId: String, albumName: String, zoomSourceId: String? = nil, zoomNamespace: Namespace.ID? = nil, coverArtId: String? = nil, initialDominantColor: Color = .clear, initialCoverImage: PlatformImage? = nil, mode: AlbumDetailMode = .full) {
@@ -59,6 +60,7 @@ struct AlbumDetailView: View {
         self.zoomNamespace = zoomNamespace
         self.mode = mode
         _dominantColor = State(initialValue: initialDominantColor)
+        _enrichment = State(initialValue: NowLocalService.shared.cachedEnrichment(album: albumName, artist: nil))
     }
 
     @Environment(\.appContainer) private var container
@@ -78,10 +80,17 @@ struct AlbumDetailView: View {
     @Query private var albumFavoriteMatches: [FavoriteRecord]
     @Query private var downloadedAlbumTracks: [DownloadedTrack]
 
+    private var effectiveEnrichment: NowLocalEnrichment? {
+        if let enrichment { return enrichment }
+        let album = viewModel?.albumName ?? initialName
+        let artist = viewModel?.artistName ?? initialArtistName
+        return NowLocalService.shared.cachedEnrichment(album: album, artist: artist)
+    }
+
     private var resolvedAnimatedSquareURL: URL? {
         guard !UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_disabled") else { return nil }
         return NowLocalService.shared.resolveArtworkURL(
-            path: enrichment?.animatedSquareUrl,
+            path: effectiveEnrichment?.animatedSquareUrl,
             activeServerBaseURL: container?.serverState.activeServer?.baseURL
         )
     }
@@ -89,7 +98,7 @@ struct AlbumDetailView: View {
     private var resolvedAnimatedTallURL: URL? {
         guard !UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_disabled") else { return nil }
         return NowLocalService.shared.resolveArtworkURL(
-            path: enrichment?.animatedTallUrl,
+            path: effectiveEnrichment?.animatedTallUrl,
             activeServerBaseURL: container?.serverState.activeServer?.baseURL
         )
     }
@@ -99,7 +108,7 @@ struct AlbumDetailView: View {
     }
 
     private var hasTallAnimatedCover: Bool {
-        resolvedAnimatedTallURL != nil && isMotionVideoReady
+        resolvedAnimatedTallURL != nil
     }
 
     private var hasAnimatedCover: Bool {
@@ -392,14 +401,21 @@ struct AlbumDetailView: View {
     }
 
     private func handleEnrichmentTask() async {
-        isMotionVideoReady = false
         let album = viewModel?.albumName ?? initialName
         let artist = viewModel?.artistName ?? initialArtistName
-        enrichment = await NowLocalService.shared.fetchEnrichment(
+        if enrichment == nil {
+            enrichment = NowLocalService.shared.cachedEnrichment(album: album, artist: artist)
+        }
+        let fetched = await NowLocalService.shared.fetchEnrichment(
             album: album,
             artist: artist,
             activeServerBaseURL: container?.serverState.activeServer?.baseURL
         )
+        if let fetched {
+            withAnimation(.easeInOut(duration: 0.35)) {
+                enrichment = fetched
+            }
+        }
     }
 
     var body: some View {
@@ -504,8 +520,8 @@ struct AlbumDetailView: View {
             genre: viewModel?.genre,
             isLoading: viewModel == nil,
             isOffline: viewModel?.isOffline == true,
-            isLossless: enrichment?.isLossless ?? false,
-            isAtmos: enrichment?.isAtmos ?? false
+            isLossless: effectiveEnrichment?.isLossless ?? false,
+            isAtmos: effectiveEnrichment?.isAtmos ?? false
         )
         .padding(.top, hasAnimatedCover ? MinidiscSpacing.s : MinidiscSpacing.xl)
         .zIndex(2)
@@ -710,7 +726,6 @@ struct AlbumArtworkSection: View {
         Group {
             if let animatedURL {
                 GeometryReader { geo in
-                    let isTall = isVideoReady
                     let width = geo.size.width
                     let tallHeight = width * 4.0 / 3.0
 
@@ -718,37 +733,26 @@ struct AlbumArtworkSection: View {
                         videoURL: animatedURL,
                         fallbackId: coverArtId,
                         fallbackImage: coverImage,
-                        cornerRadius: isTall ? 0 : MinidiscCornerRadius.large,
-                        aspectRatio: isTall ? nil : 1,
+                        cornerRadius: 0,
+                        aspectRatio: nil,
                         onReady: onVideoReady
                     )
-                    .frame(
-                        width: isTall ? width : min(width - 128, 340),
-                        height: isTall ? tallHeight : min(width - 128, 340)
-                    )
+                    .frame(width: width, height: tallHeight)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .mask {
-                        if isTall {
-                            LinearGradient(
-                                stops: [
-                                    .init(color: .black, location: 0),
-                                    .init(color: .black, location: 2.0 / 3.0),
-                                    .init(color: .clear, location: 1.0)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        } else {
-                            Color.black
-                        }
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .black, location: 2.0 / 3.0),
+                                .init(color: .clear, location: 1.0)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     }
-                    .shadow(
-                        color: isTall ? .clear : .black.opacity(0.16),
-                        radius: isTall ? 0 : 12,
-                        y: isTall ? 0 : 6
-                    )
+                    .shadow(color: .clear, radius: 0, y: 0)
                 }
-                .frame(height: isVideoReady ? 440 : 340)
+                .frame(height: 440)
                 .id(animatedURL)
             } else {
                 CoverArtView(
@@ -932,14 +936,16 @@ public struct AudioQualityBadge: View {
     public let type: BadgeType
     public let title: String
     public var withBackground: Bool
+    public var textWeight: Font.Weight?
 
-    public init(_ type: BadgeType, title: String? = nil, withBackground: Bool = true) {
+    public init(_ type: BadgeType, title: String? = nil, withBackground: Bool = true, textWeight: Font.Weight? = nil) {
         self.type = type
         self.title = title ?? (type == .dolbyAtmos ? "Dolby Atmos" : "Lossless")
         self.withBackground = withBackground
+        self.textWeight = textWeight
     }
 
-    public init(title: String, withBackground: Bool = true) {
+    public init(title: String, withBackground: Bool = true, textWeight: Font.Weight? = nil) {
         if title.localizedCaseInsensitiveContains("atmos") || title.localizedCaseInsensitiveContains("dolby") {
             self.type = .dolbyAtmos
         } else {
@@ -947,6 +953,7 @@ public struct AudioQualityBadge: View {
         }
         self.title = title
         self.withBackground = withBackground
+        self.textWeight = textWeight
     }
 
     @ViewBuilder
@@ -966,19 +973,20 @@ public struct AudioQualityBadge: View {
                         height: withBackground ? 9.5 : 8.8
                     )
             }
+            let resolvedWeight: Font.Weight = textWeight ?? (withBackground ? .bold : .semibold)
             Text(title)
-                .font(.system(size: withBackground ? 11.5 : 11, weight: withBackground ? .bold : .semibold))
+                .font(.system(size: withBackground ? 11.5 : 11, weight: resolvedWeight))
                 .textCase(.none)
                 .lineLimit(1)
         }
 
         if withBackground {
             content
-                .padding(.horizontal, 8.5)
-                .padding(.vertical, 3.5)
+                .padding(.horizontal, 7.5)
+                .padding(.vertical, 3)
                 .background(Color.white.opacity(0.18))
                 .foregroundStyle(.white)
-                .clipShape(Capsule())
+                .clipShape(RoundedRectangle(cornerRadius: 4.5, style: .continuous))
         } else {
             content
         }

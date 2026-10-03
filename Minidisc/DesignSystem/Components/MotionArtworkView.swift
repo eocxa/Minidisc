@@ -53,12 +53,14 @@ struct MotionArtworkView: View {
                 cornerRadius: cornerRadius,
                 initialImage: fallbackImage
             )
-            .aspectRatio(1, contentMode: .fit)
+            .aspectRatio(contentMode: .fill)
 
             // Capa de video animado en bucle si existe URL
             if let videoURL {
                 LoopingVideoPlayerRepresentable(videoURL: videoURL, isPaused: isPaused, onReady: {
-                    isVideoReady = true
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        isVideoReady = true
+                    }
                     onReady?()
                 })
                 .id(videoURL)
@@ -164,7 +166,7 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
 
             self.player = avPlayer
             view.playerLayer.player = avPlayer
-            view.playerLayer.videoGravity = .resizeAspect
+            view.playerLayer.videoGravity = .resizeAspectFill
 
             readyObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
                 if item.status == .readyToPlay {
@@ -247,7 +249,7 @@ private class PlayerContainerUIView: UIView {
         clipsToBounds = true
         layer.masksToBounds = true
         playerLayer.masksToBounds = true
-        playerLayer.videoGravity = .resizeAspect
+        playerLayer.videoGravity = .resizeAspectFill
     }
 
     override func layoutSubviews() {

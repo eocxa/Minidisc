@@ -51,10 +51,20 @@ struct FullPlayerView: View {
     @State private var lastActivityTime: Date = Date()
     @Namespace private var morphNS
 
+    private var effectiveTrackEnrichment: NowLocalEnrichment? {
+        if let currentTrackEnrichment { return currentTrackEnrichment }
+        let track = container?.playerState.currentTrack
+        return NowLocalService.shared.cachedEnrichment(
+            album: track?.albumName,
+            artist: track?.artist,
+            title: track?.title
+        )
+    }
+
     private var resolvedAnimatedCoverURL: URL? {
         guard !UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_disabled") else { return nil }
         guard !showLyrics else { return nil }
-        let path = currentTrackEnrichment?.animatedTallUrl ?? currentTrackEnrichment?.animatedSquareUrl
+        let path = effectiveTrackEnrichment?.animatedTallUrl ?? effectiveTrackEnrichment?.animatedSquareUrl
         return NowLocalService.shared.resolveArtworkURL(
             path: path,
             activeServerBaseURL: container?.serverState.activeServer?.baseURL
@@ -62,7 +72,7 @@ struct FullPlayerView: View {
     }
 
     private var hasMotionCanvas: Bool {
-        resolvedAnimatedCoverURL != nil && isMotionArtworkReady
+        resolvedAnimatedCoverURL != nil
     }
 
     private var isCompact: Bool {
@@ -122,11 +132,20 @@ struct FullPlayerView: View {
                     await newVM.load()
                 }
                 .task(id: playerState.currentTrack?.id) {
-                    isMotionArtworkReady = false
                     guard let track = playerState.currentTrack else {
                         currentTrackEnrichment = nil
+                        isMotionArtworkReady = false
                         return
                     }
+
+                    if let cached = NowLocalService.shared.cachedEnrichment(
+                        album: track.albumName,
+                        artist: track.artist,
+                        title: track.title
+                    ) {
+                        currentTrackEnrichment = cached
+                    }
+
                     var enrichment = await NowLocalService.shared.fetchEnrichment(
                         album: track.albumName,
                         artist: track.artist,
@@ -157,7 +176,11 @@ struct FullPlayerView: View {
                             )
                         }
                     }
-                    currentTrackEnrichment = enrichment
+                    if let enrichment {
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            currentTrackEnrichment = enrichment
+                        }
+                    }
                 }
                 .sheet(item: $playlistAddition.request) { request in
                     AddToPlaylistSheet(request: request)
@@ -280,8 +303,8 @@ struct FullPlayerView: View {
                                 playerService: container?.playerService,
                                 contentColor: vm.contentColor,
                                 secondaryContentColor: vm.secondaryContentColor,
-                                isLossless: currentTrackEnrichment?.isLossless ?? false,
-                                isAtmos: currentTrackEnrichment?.isAtmos ?? false
+                                isLossless: effectiveTrackEnrichment?.isLossless ?? false,
+                                isAtmos: effectiveTrackEnrichment?.isAtmos ?? false
                             )
                             .padding(.horizontal, Self.playerHorizontalPadding)
                             .padding(.top, MinidiscSpacing.m)
@@ -1061,7 +1084,7 @@ private struct ScrubberTimeLabels: View {
                     AudioQualityBadge(.lossless, withBackground: true)
                 }
                 if isAtmos {
-                    AudioQualityBadge(.dolbyAtmos, withBackground: false)
+                    AudioQualityBadge(.dolbyAtmos, withBackground: false, textWeight: .regular)
                         .foregroundStyle(color)
                 }
             }

@@ -92,9 +92,67 @@ nonisolated struct NowLocalLyricsResponse: Sendable, Codable, Equatable {
 
 actor NowLocalService {
     static let shared = NowLocalService()
+    private static let enrichmentMemoryCacheLock = NSLock()
+    private static var enrichmentMemoryCache: [String: NowLocalEnrichment] = loadEnrichmentCacheFromDisk()
+
+    private static var enrichmentCacheFileURL: URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("nowlocal_enrichment_cache.json")
+    }
+
+    private static func loadEnrichmentCacheFromDisk() -> [String: NowLocalEnrichment] {
+        guard let url = enrichmentCacheFileURL,
+              let data = try? Data(contentsOf: url),
+              let decoded = try? JSONDecoder().decode([String: NowLocalEnrichment].self, from: data) else {
+            return [:]
+        }
+        return decoded
+    }
+
+    private static func saveEnrichmentCacheToDisk(_ cache: [String: NowLocalEnrichment]) {
+        guard let url = enrichmentCacheFileURL else { return }
+        Task.detached(priority: .background) {
+            if let data = try? JSONEncoder().encode(cache) {
+                try? data.write(to: url, options: [.atomic])
+            }
+        }
+    }
+
     private var cache: [String: NowLocalEnrichment] = [:]
     private var lyricsCache: [String: NowLocalLyricsResponse] = [:]
     private let logger = Logger(subsystem: "app.minidisc.nowlocal", category: "Enrichment")
+
+    nonisolated func cachedEnrichment(album: String?, artist: String?, title: String? = nil) -> NowLocalEnrichment? {
+        let alb = (album ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let art = (artist ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let tit = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let trackKey = "\(alb)_\(art)_\(tit)"
+        let albumKey = "\(alb)_\(art)_"
+        let albumOnlyKey = "\(alb)__"
+
+        Self.enrichmentMemoryCacheLock.lock()
+        defer { Self.enrichmentMemoryCacheLock.unlock() }
+
+        if !tit.isEmpty, let exact = Self.enrichmentMemoryCache[trackKey] {
+            return exact
+        }
+        if let albumEnrichment = Self.enrichmentMemoryCache[albumKey] {
+            return albumEnrichment
+        }
+        if let albumOnly = Self.enrichmentMemoryCache[albumOnlyKey] {
+            return albumOnly
+        }
+        return nil
+    }
+
+    nonisolated func storeCachedEnrichment(_ enrichment: NowLocalEnrichment, forKeys keys: [String]) {
+        Self.enrichmentMemoryCacheLock.lock()
+        for k in keys {
+            Self.enrichmentMemoryCache[k.lowercased()] = enrichment
+        }
+        let snapshot = Self.enrichmentMemoryCache
+        Self.enrichmentMemoryCacheLock.unlock()
+        Self.saveEnrichmentCacheToDisk(snapshot)
+    }
 
     nonisolated func resolveCandidateBaseURLs(activeServerBaseURL: String?) -> [URL] {
         var urls: [URL] = []
@@ -180,6 +238,7 @@ actor NowLocalService {
             let enrichment = try decoder.decode(NowLocalEnrichment.self, from: data)
             if enrichment.found {
                 cache[cacheKey] = enrichment
+                storeCachedEnrichment(enrichment, forKeys: [cacheKey, "\(album ?? "")_\(artist ?? "")_"])
                 return enrichment
             }
         } catch {
@@ -254,9 +313,14 @@ actor NowLocalService {
         if let cached = cache[cacheKey] {
             return cached
         }
+        if let fastCached = cachedEnrichment(album: album, artist: artist, title: title) {
+            cache[cacheKey] = fastCached
+            return fastCached
+        }
 
         for base in candidates {
             if let result = await performEnrichmentRequest(base: base, album: album, artist: artist, title: title, cacheKey: cacheKey) {
+                storeCachedEnrichment(result, forKeys: [cacheKey, "\(album ?? "")_\(artist ?? "")_"])
                 return result
             }
         }
@@ -270,11 +334,13 @@ actor NowLocalService {
             let cleanKey = "\(cleanAlbum ?? "")_\(cleanArtist ?? "")_\(cleanTitle ?? "")"
             if let cachedClean = cache[cleanKey] {
                 cache[cacheKey] = cachedClean
+                storeCachedEnrichment(cachedClean, forKeys: [cacheKey, cleanKey, "\(cleanAlbum ?? "")_\(cleanArtist ?? "")_"])
                 return cachedClean
             }
             for base in candidates {
                 if let cleanResult = await performEnrichmentRequest(base: base, album: cleanAlbum, artist: cleanArtist, title: cleanTitle, cacheKey: cleanKey) {
                     cache[cacheKey] = cleanResult
+                    storeCachedEnrichment(cleanResult, forKeys: [cacheKey, cleanKey, "\(cleanAlbum ?? "")_\(cleanArtist ?? "")_"])
                     return cleanResult
                 }
             }
@@ -284,6 +350,7 @@ actor NowLocalService {
         for base in candidates {
             if let libResult = await performLibraryLookup(base: base, album: album, artist: artist, title: title) {
                 cache[cacheKey] = libResult
+                storeCachedEnrichment(libResult, forKeys: [cacheKey, "\(album ?? "")_\(artist ?? "")_"])
                 return libResult
             }
         }
