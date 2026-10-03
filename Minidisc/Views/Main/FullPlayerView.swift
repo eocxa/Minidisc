@@ -191,7 +191,7 @@ struct FullPlayerView: View {
                         title: track.title,
                         activeServerBaseURL: container?.serverState.activeServer?.baseURL
                     )
-                    if enrichment?.animatedTallUrl == nil && enrichment?.animatedSquareUrl == nil, let album = track.albumName, !album.isEmpty {
+                    if enrichment?.animatedTallUrl == nil, let album = track.albumName, !album.isEmpty {
                         let albumEnrichment = await NowLocalService.shared.fetchEnrichment(
                             album: album,
                             artist: track.artist,
