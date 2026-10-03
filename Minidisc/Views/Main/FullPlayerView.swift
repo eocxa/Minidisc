@@ -923,7 +923,6 @@ private struct TrackInfoSection: View {
     }
 
     private func goToArtist() {
-        showArtistAlbumMenu = false
         guard let track = playerState.currentTrack else { return }
         if track.artistId != nil {
             postNavigateToArtist(track: track)
@@ -939,7 +938,6 @@ private struct TrackInfoSection: View {
     }
 
     private func goToAlbum() {
-        showArtistAlbumMenu = false
         guard let track = playerState.currentTrack else { return }
         if track.albumId != nil {
             postNavigateToAlbum(track: track)

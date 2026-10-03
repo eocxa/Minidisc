@@ -152,6 +152,8 @@ nonisolated final class AVPlayerEngine: AudioEngine, @unchecked Sendable {
                 }
                 self.lock.unlock()
                 guard isActive, let playbackToken else { return }
+                let isFinished = self.lock.withLock { self.didSignalEnd }
+                guard !isFinished else { return }
                 switch player.timeControlStatus {
                 case .playing:
                     self.delegate?.audioEngineDidChangeState(.playing, playbackToken: playbackToken)
@@ -159,7 +161,8 @@ nonisolated final class AVPlayerEngine: AudioEngine, @unchecked Sendable {
                     self.delegate?.audioEngineDidChangeState(.paused, playbackToken: playbackToken)
                 case .waitingToPlayAtSpecifiedRate:
                     self.delegate?.audioEngineDidChangeState(.buffering, playbackToken: playbackToken)
-                @unknown default:                    break
+                @unknown default:
+                    break
                 }
             })
         }
@@ -383,6 +386,7 @@ nonisolated final class AVPlayerEngine: AudioEngine, @unchecked Sendable {
     func resume() {
         lock.lock()
         defer { lock.unlock() }
+        guard !didSignalEnd else { return }
         // Queued pause callbacks can arrive after this deck already resumed/began buffering.
         // Reasserting play there restarts watchdog/overlap work without helping the connection.
         guard !shouldBePlaying || activePlayer.timeControlStatus == .paused else { return }
@@ -787,6 +791,11 @@ nonisolated final class AVPlayerEngine: AudioEngine, @unchecked Sendable {
               let promotedPlaybackToken = preloadedPlaybackToken,
               let sourceURL = preloadedSourceURL else {
             clearPreloadedDeck()
+            stopWatchdog()
+            shouldBePlaying = false
+            clearItemObservers()
+            removeTransitionObservers()
+            activePlayer.pause()
             return AudioEngineTrackEnd(
                 endedPlaybackToken: endedPlaybackToken,
                 endedPosition: endedPosition,

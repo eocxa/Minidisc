@@ -541,14 +541,16 @@ actor PlayerService: PlayerServiceProtocol {
                     playbackGeneration: generation,
                     transportIntentGeneration: transportGeneration
                 ) else { return }
-                await MainActor.run { state.playbackState = previousPlaybackState }
+                let fallbackState: PlaybackState = engineTransition != nil ? .paused : previousPlaybackState
+                await MainActor.run { state.playbackState = fallbackState }
                 throw e
             } catch {
                 guard isCurrentPlaybackIntent(
                     playbackGeneration: generation,
                     transportIntentGeneration: transportGeneration
                 ) else { return }
-                await MainActor.run { state.playbackState = previousPlaybackState }
+                let fallbackState: PlaybackState = engineTransition != nil ? .paused : previousPlaybackState
+                await MainActor.run { state.playbackState = fallbackState }
                 throw error
             }
         }
@@ -1992,12 +1994,27 @@ actor PlayerService: PlayerServiceProtocol {
             Logger.player.info(
                 "[TRANSITION] queue item \(index) → id=\(next.id, privacy: .public) title=\(next.title, privacy: .public) outcome=\(String(describing: currentTrackOutcome), privacy: .public)"
             )
-            try await play(
-                tracks: queue,
-                startIndex: index,
-                preparedPlayback: preparedPlayback,
-                engineTransition: engineTransition
-            )
+            do {
+                try await play(
+                    tracks: queue,
+                    startIndex: index,
+                    preparedPlayback: preparedPlayback,
+                    engineTransition: engineTransition
+                )
+            } catch {
+                Logger.player.error(
+                    "[TRANSITION] play failed for item \(index) '\(next.id, privacy: .public)': \(error, privacy: .public)"
+                )
+                if currentTrackOutcome == .completed {
+                    await handleUnavailableTrack(
+                        trackID: next.id,
+                        expectedPlaybackGeneration: playbackGeneration,
+                        expectedTransportGeneration: transportIntentGeneration
+                    )
+                } else {
+                    throw error
+                }
+            }
 
         case .restartCurrent:
             await seek(to: 0)
@@ -2007,8 +2024,13 @@ actor PlayerService: PlayerServiceProtocol {
             await recordCurrentTrackPlayback(trigger: "repeat_one")
             wasTrackCompletedNaturally = false
             playbackProgressTracker.startTrack()
+            await MainActor.run {
+                state.position = 0
+                state.playbackState = .loading
+            }
             if let source = currentSource {
                 let trackID = await MainActor.run { state.currentTrack?.id ?? "repeat" }
+                let duration = await MainActor.run { state.duration }
                 let playbackToken = engine.play(
                     trackID: trackID,
                     url: source.url,
@@ -2019,6 +2041,13 @@ actor PlayerService: PlayerServiceProtocol {
                     playbackGeneration: playbackGeneration,
                     transportIntentGeneration: transportIntentGeneration
                 )
+                engine.setTrackDuration(Double(duration))
+                await MainActor.run {
+                    state.playbackState = .playing
+                    state.isPlaybackAvailable = true
+                }
+                startProgressTimer()
+                await pushPositionSnapshot(rate: 1.0)
             }
 
         case .stopAtEnd(let currentTrackOutcome):
@@ -2815,6 +2844,14 @@ actor PlayerService: PlayerServiceProtocol {
         }
 
         let currentProgress = engine.progress
+        let effectiveDuration = snapshot.duration > 0 ? snapshot.duration : engine.duration
+        if effectiveDuration > 0,
+           (currentProgress >= effectiveDuration - 2.5 || snapshot.position >= effectiveDuration - 2.5) {
+            cancelNetworkRecoveryValidation()
+            networkReloadRequiredTrackID = nil
+            networkRecoveryAttemptBudget.reset()
+            return
+        }
         if requireStall,
            activeEngineState == .playing,
            currentProgress > baselineProgress + 0.1 {
@@ -3623,6 +3660,7 @@ actor PlayerService: PlayerServiceProtocol {
             )
         } catch {
             Logger.player.error("[TRANSITION] handleEndOfTrack failed: \(error, privacy: .public)")
+            await pauseAtEndOfQueue()
         }
     }
 
@@ -3761,9 +3799,15 @@ actor PlayerService: PlayerServiceProtocol {
             }
         case .buffering, .paused:
             playbackProgressTracker.breakContinuity()
-            await armRecoveryForUnexpectedEngineStall(playbackToken: playbackToken)
-            if newState == .paused {
-                await resumeAfterNetworkPauseIfNeeded(playbackToken: playbackToken)
+            let currentDuration = await MainActor.run { state.duration }
+            let effectiveDuration = currentDuration > 0 ? currentDuration : engine.duration
+            let currentPos = engine.progress
+            let isNearEnd = effectiveDuration > 0 && currentPos >= effectiveDuration - 2.5
+            if !isNearEnd && !endOfTrackEventsInProgress.contains(playbackToken) {
+                await armRecoveryForUnexpectedEngineStall(playbackToken: playbackToken)
+                if newState == .paused {
+                    await resumeAfterNetworkPauseIfNeeded(playbackToken: playbackToken)
+                }
             }
         case .stopped:
             playbackProgressTracker.breakContinuity()
@@ -3792,8 +3836,9 @@ actor PlayerService: PlayerServiceProtocol {
               networkReloadRequiredTrackID == trackID else { return }
 
         let progress = engine.progress
-        if snapshot.duration > 0,
-           progress >= snapshot.duration - 1.5 {
+        let effectiveDuration = snapshot.duration > 0 ? snapshot.duration : engine.duration
+        if effectiveDuration > 0,
+           progress >= effectiveDuration - 2.5 {
             // A pause at the end belongs to the normal queue transition, not network recovery.
             return
         }
@@ -3808,14 +3853,24 @@ actor PlayerService: PlayerServiceProtocol {
         playbackToken: AudioEnginePlaybackToken
     ) async {
         guard audioSystemRecovery == nil else { return }
+        guard !endOfTrackEventsInProgress.contains(playbackToken) else { return }
         let snapshot = await MainActor.run {
             (trackID: state.currentTrack?.id, playbackState: state.playbackState,
-             serverID: serverService.state.activeServer?.id)
+             serverID: serverService.state.activeServer?.id,
+             duration: state.duration,
+             position: state.position)
         }
         guard audioSystemRecovery == nil, isCurrentEngineEvent(playbackToken),
               let trackID = snapshot.trackID,
               let serverID = snapshot.serverID,
               currentSourceIsRemoteStream, snapshot.playbackState == .playing else { return }
+
+        let progress = engine.progress
+        let effectiveDuration = snapshot.duration > 0 ? snapshot.duration : engine.duration
+        if effectiveDuration > 0,
+           (progress >= effectiveDuration - 2.5 || snapshot.position >= effectiveDuration - 2.5) {
+            return
+        }
         let localSource = await mediaResolver.localSource(songId: trackID, serverId: serverID)
         guard isCurrentEngineEvent(playbackToken), audioSystemRecovery == nil,
               localSource != nil || latestNetworkPathEvent.isOnline else { return }
