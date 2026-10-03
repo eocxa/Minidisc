@@ -350,10 +350,18 @@ struct TTMLLineContentView: View {
                 }
             }
         } else {
+            let start = line.main?.time ?? line.time
+            let end = line.main?.endTime ?? line.endTime ?? nextLineTime.map { min($0, start + 6.0) } ?? (start + 3.0)
+
             if isLineActive {
                 Text(line.main?.text ?? line.text)
                     .font(.system(size: 34, weight: .bold))
-                    .foregroundStyle(Color.white)
+                    .karaoke(
+                        time: currentTime,
+                        start: start,
+                        end: end,
+                        configuration: karaokeConfig(isLineActive: true)
+                    )
                     .multilineTextAlignment(isV2 ? .trailing : .leading)
             } else {
                 Text(line.main?.text ?? line.text)
@@ -381,10 +389,22 @@ struct TTMLLineContentView: View {
                 .opacity(0.85)
                 .transition(.opacity.combined(with: .offset(y: isAdlibBefore ? -4 : 4)))
             } else if let adlibText = adlib.text, !adlibText.isEmpty {
+                let aStart = adlib.time ?? line.time
+                let aEnd = adlib.endTime ?? line.endTime ?? (aStart + 2.5)
+
                 if isLineActive {
                     Text(adlibText)
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.85))
+                        .karaoke(
+                            time: currentTime,
+                            start: aStart,
+                            end: aEnd,
+                            configuration: karaokeConfig(
+                                isLineActive: true,
+                                dimOpacity: 0.18,
+                                litColor: Color.white.opacity(0.85)
+                            )
+                        )
                         .multilineTextAlignment(isV2 ? .trailing : .leading)
                         .transition(.opacity.combined(with: .offset(y: isAdlibBefore ? -4 : 4)))
                 } else {
@@ -524,7 +544,7 @@ struct TTMLLyricsView: View {
     }
 
     private var hasWordSync: Bool {
-        lyricsResponse.hasWordSync ?? (lyricsResponse.lyrics.contains { ($0.words?.isEmpty == false) || ($0.main?.words?.isEmpty == false) })
+        lyricsResponse.hasWordSync ?? true
     }
 
     var body: some View {
