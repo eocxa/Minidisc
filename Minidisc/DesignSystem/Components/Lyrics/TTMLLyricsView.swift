@@ -367,21 +367,41 @@ struct TTMLLineContentView: View {
     @ViewBuilder
     private var adlibsView: some View {
         if line.hasAdlib == true, let adlib = line.adlib, isLineActive && !isUserScrolling {
-            let rawText = (adlib.text?.isEmpty == false ? adlib.text : nil)
-                ?? adlib.words?.map(\.text).joined()
-                ?? ""
-            let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                Text(trimmed)
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(Color.white.opacity(0.85))
-                    .multilineTextAlignment(isV2 ? .trailing : .leading)
-                    .transition(
-                        .asymmetric(
-                            insertion: .opacity.combined(with: .offset(y: isAdlibBefore ? -6 : 6)),
-                            removal: .opacity.combined(with: .offset(y: isAdlibBefore ? -6 : 6))
+            if let adlibWords = adlib.words, !adlibWords.isEmpty, hasWordSync {
+                LyricsFlowLayout(horizontalAlignment: alignment, verticalSpacing: 2) {
+                    ForEach(Array(groupWordsIntoWordUnits(adlibWords).enumerated()), id: \.offset) { _, group in
+                        TTMLWordUnitView(
+                            words: group,
+                            currentTime: currentTime,
+                            isLineActive: isLineActive,
+                            font: .system(size: 20, weight: .bold)
                         )
+                    }
+                }
+                .opacity(0.85)
+                .transition(
+                    .asymmetric(
+                        insertion: .opacity.combined(with: .offset(y: isAdlibBefore ? -6 : 6)),
+                        removal: .opacity.combined(with: .offset(y: isAdlibBefore ? -6 : 6))
                     )
+                )
+            } else {
+                let rawText = (adlib.text?.isEmpty == false ? adlib.text : nil)
+                    ?? adlib.words?.map(\.text).joined()
+                    ?? ""
+                let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    Text(trimmed)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(Color.white.opacity(0.85))
+                        .multilineTextAlignment(isV2 ? .trailing : .leading)
+                        .transition(
+                            .asymmetric(
+                                insertion: .opacity.combined(with: .offset(y: isAdlibBefore ? -6 : 6)),
+                                removal: .opacity.combined(with: .offset(y: isAdlibBefore ? -6 : 6))
+                            )
+                        )
+                }
             }
         }
     }
