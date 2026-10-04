@@ -93,13 +93,29 @@ nonisolated struct NowLocalLyricsResponse: Sendable, Codable, Equatable {
 private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
     private let lock = NSLock()
     private var cache: [String: NowLocalEnrichment]
+    private static let v3MigrationKey = "minidisc_nowlocal_cache_v3_cleaned"
 
     nonisolated init() {
+        if !UserDefaults.standard.bool(forKey: Self.v3MigrationKey) {
+            UserDefaults.standard.set(true, forKey: Self.v3MigrationKey)
+            let cachesDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            if let old1 = cachesDir?.appendingPathComponent("nowlocal_enrichment_cache.json") {
+                try? FileManager.default.removeItem(at: old1)
+            }
+            if let old2 = cachesDir?.appendingPathComponent("nowlocal_enrichment_cache_v2.json") {
+                try? FileManager.default.removeItem(at: old2)
+            }
+            let motionDir = cachesDir?.appendingPathComponent("app.minidisc/motion_artwork", isDirectory: true)
+            if let motionDir {
+                try? FileManager.default.removeItem(at: motionDir)
+                try? FileManager.default.createDirectory(at: motionDir, withIntermediateDirectories: true)
+            }
+        }
         self.cache = Self.loadFromDisk()
     }
 
     private static var cacheFileURL: URL? {
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("nowlocal_enrichment_cache.json")
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("nowlocal_enrichment_cache_v3.json")
     }
 
     nonisolated private static func loadFromDisk() -> [String: NowLocalEnrichment] {
@@ -110,14 +126,16 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
         }
         var sanitized: [String: NowLocalEnrichment] = [:]
         for (k, v) in decoded {
-            // Drop corrupted entries where key album does not match enrichment album
-            if let valAlb = v.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !valAlb.isEmpty {
-                let keyParts = k.lowercased().split(separator: "_", omittingEmptySubsequences: false)
-                if let keyAlb = keyParts.first, !keyAlb.isEmpty {
-                    if keyAlb != valAlb {
-                        continue
-                    }
+            guard let valAlb = v.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !valAlb.isEmpty else {
+                continue
+            }
+            let keyParts = k.lowercased().split(separator: "_", omittingEmptySubsequences: false)
+            if let keyAlb = keyParts.first, !keyAlb.isEmpty {
+                if keyAlb != valAlb {
+                    continue
                 }
+            } else {
+                continue
             }
             if k.hasSuffix("_") && v.lyricsUrl != nil {
                 sanitized[k] = NowLocalEnrichment(
@@ -147,6 +165,15 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
             if let data = try? JSONEncoder().encode(snapshot) {
                 try? data.write(to: url, options: [.atomic])
             }
+        }
+    }
+
+    nonisolated func clearAll() {
+        lock.lock()
+        cache.removeAll()
+        lock.unlock()
+        if let url = Self.cacheFileURL {
+            try? FileManager.default.removeItem(at: url)
         }
     }
 
@@ -182,15 +209,13 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
             guard !alb.isEmpty else { return nil }
             if let exact = cache[albumKey] ?? cache[albumOnlyKey] {
                 if let valAlb = exact.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-                   !valAlb.isEmpty && valAlb != alb {
-                    // Mismatched album entry, ignore!
-                } else {
+                   valAlb == alb {
                     return exact
                 }
             }
             if let prefixMatch = cache.first(where: { (k, v) in
                 ((k.hasPrefix("\(alb)_") && k.hasSuffix("_")) || k == "\(alb)__") &&
-                (v.album == nil || v.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == alb)
+                (v.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == alb)
             })?.value {
                 return prefixMatch
             }
@@ -198,7 +223,7 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
             if let trackWithMotion = cache.first(where: { (k, v) in
                 k.hasPrefix("\(alb)_") &&
                 (v.animatedTallUrl != nil || v.animatedSquareUrl != nil) &&
-                (v.album == nil || v.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == alb)
+                (v.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == alb)
             })?.value {
                 return stripLyrics(trackWithMotion)
             }
@@ -321,6 +346,16 @@ actor NowLocalService {
     private var cache: [String: NowLocalEnrichment] = [:]
     private var lyricsCache: [String: NowLocalLyricsResponse] = [:]
     private let logger = Logger(subsystem: "app.minidisc.nowlocal", category: "Enrichment")
+
+    func clearCache() {
+        cache.removeAll()
+        lyricsCache.removeAll()
+        Self.storage.clearAll()
+    }
+
+    nonisolated func clearCacheSync() {
+        Self.storage.clearAll()
+    }
 
     nonisolated func cachedEnrichment(album: String?, artist: String?, title: String? = nil) -> NowLocalEnrichment? {
         Self.storage.get(album: album, artist: artist, title: title)
@@ -617,14 +652,14 @@ actor NowLocalService {
             let cleanAlb = album.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
             if let cached = cache[albumOnlyKey] {
                 let cAlb = cached.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-                if cAlb.isEmpty || cAlb == cleanAlb {
+                if !cAlb.isEmpty && cAlb == cleanAlb {
                     return cached
                 }
             }
             for base in candidates {
                 if let result = await performEnrichmentRequest(base: base, album: album, artist: nil, title: nil, cacheKey: albumOnlyKey) {
                     let rAlb = result.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-                    if rAlb.isEmpty || rAlb == cleanAlb {
+                    if !rAlb.isEmpty && rAlb == cleanAlb {
                         storeCachedEnrichment(result, forKeys: [albumOnlyKey, "\(album)_\(artist ?? "")_"])
                         return result
                     }

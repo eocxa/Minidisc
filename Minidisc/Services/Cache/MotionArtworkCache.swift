@@ -27,12 +27,35 @@ private nonisolated final class FirstFrameMemoryCache: @unchecked Sendable {
     }
 }
 
+private nonisolated final class PersistFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Bool = true
+
+    func get() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+
+    func set(_ newValue: Bool) {
+        lock.lock()
+        defer { lock.unlock() }
+        value = newValue
+    }
+}
+
 actor MotionArtworkCache {
     static let shared = MotionArtworkCache()
 
     private let cacheDirectory: URL
     private var inFlightDownloads: [URL: Task<URL, Error>] = [:]
     nonisolated private static let firstFrames = FirstFrameMemoryCache()
+    private static let persistFlag = PersistFlag()
+
+    nonisolated var persistMotionArtworkEnabled: Bool {
+        get { Self.persistFlag.get() }
+        set { Self.persistFlag.set(newValue) }
+    }
 
     init() {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -41,11 +64,10 @@ actor MotionArtworkCache {
     }
 
     private static func cacheKey(for remoteURL: URL) -> String {
+        let path = remoteURL.path
         if let components = URLComponents(url: remoteURL, resolvingAgainstBaseURL: false) {
-            let artType = remoteURL.path.contains("square") ? "square" : (remoteURL.path.contains("tall") ? "tall" : "video")
-            if let v = components.queryItems?.first(where: { $0.name == "v" })?.value, !v.isEmpty {
-                return "artwork_\(artType)_\(v)"
-            }
+            let v = components.queryItems?.first(where: { $0.name == "v" })?.value ?? ""
+            return "\(path)_\(v)"
         }
         return remoteURL.absoluteString
     }
@@ -58,6 +80,7 @@ actor MotionArtworkCache {
     }
 
     nonisolated func cachedURL(for remoteURL: URL) -> URL? {
+        guard persistMotionArtworkEnabled else { return nil }
         let key = Self.cacheKey(for: remoteURL)
         let hash = SHA256.hash(data: Data(key.utf8))
         let filename = hash.compactMap { String(format: "%02x", $0) }.joined() + ".mp4"
@@ -107,6 +130,10 @@ actor MotionArtworkCache {
     }
 
     func loadOrDownload(for remoteURL: URL) async throws -> URL {
+        if !persistMotionArtworkEnabled {
+            _ = await extractFirstFrame(for: remoteURL)
+            return remoteURL
+        }
         if let local = cachedURL(for: remoteURL) {
             _ = await extractFirstFrame(for: remoteURL)
             return local
@@ -128,6 +155,25 @@ actor MotionArtworkCache {
         inFlightDownloads[remoteURL] = task
         defer { inFlightDownloads.removeValue(forKey: remoteURL) }
         return try await task.value
+    }
+
+    nonisolated func motionArtworkStats() -> (count: Int, bytes: Int64) {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let dir = caches.appendingPathComponent("app.minidisc/motion_artwork", isDirectory: true)
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: dir,
+            includingPropertiesForKeys: [.fileSizeKey]
+        ) else { return (0, 0) }
+        var bytes: Int64 = 0
+        var count = 0
+        for file in files {
+            let ext = file.pathExtension.lowercased()
+            if ext == "mp4" || ext == "m4v" || ext == "mov" {
+                count += 1
+                bytes += Int64((try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+            }
+        }
+        return (count, bytes)
     }
 
     func clearCache() {

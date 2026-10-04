@@ -11,6 +11,7 @@ final class CacheSettings {
     @ObservationIgnored private var _cacheFormat: CacheFormat
     @ObservationIgnored private var _cacheOverCellular: Bool
     @ObservationIgnored private var _cacheArtwork: Bool
+    @ObservationIgnored private var _cacheMotionArtwork: Bool
     @ObservationIgnored private var _keepFavoritesOffline: Bool
 
     // MARK: - Visible properties (manual observation hooks)
@@ -73,6 +74,21 @@ final class CacheSettings {
         }
     }
 
+    /// Whether animated cover art videos fetched from the server are persisted to disk.
+    var cacheMotionArtwork: Bool {
+        get {
+            access(keyPath: \.cacheMotionArtwork)
+            return _cacheMotionArtwork
+        }
+        set {
+            withMutation(keyPath: \.cacheMotionArtwork) {
+                _cacheMotionArtwork = newValue
+            }
+            defaults.set(newValue, forKey: Self.cacheMotionArtworkKey)
+            MotionArtworkCache.shared.persistMotionArtworkEnabled = newValue
+        }
+    }
+
     var keepFavoritesOffline: Bool {
         get {
             access(keyPath: \.keepFavoritesOffline)
@@ -93,6 +109,7 @@ final class CacheSettings {
     static let defaultFormat: CacheFormat = .matchStream
     static let defaultCacheOverCellular: Bool = false
     static let defaultCacheArtwork: Bool = true
+    static let defaultCacheMotionArtwork: Bool = true
 
     private static let capacityMegabytesKey = "minidisc.cache.capacityMegabytes"
     private static let legacyMaxTracksKey = "minidisc.cache.maxTracks"
@@ -100,6 +117,7 @@ final class CacheSettings {
     private static let cacheOverCellularKey = "minidisc.cache.cellular"
     private static let keepFavoritesOfflineKey = "minidisc.cache.favoritesOffline"
     private static let cacheArtworkKey = "minidisc.cache.artwork"
+    private static let cacheMotionArtworkKey = "minidisc.cache.motionArtwork"
 
     // MARK: - Init
 
@@ -129,6 +147,9 @@ final class CacheSettings {
         self._cacheOverCellular = defaults.bool(forKey: Self.cacheOverCellularKey)
         // object(forKey:) so the default is true — bool(forKey:) would silently default to false.
         self._cacheArtwork = defaults.object(forKey: Self.cacheArtworkKey) as? Bool ?? Self.defaultCacheArtwork
+        let motionCacheEnabled = defaults.object(forKey: Self.cacheMotionArtworkKey) as? Bool ?? Self.defaultCacheMotionArtwork
+        self._cacheMotionArtwork = motionCacheEnabled
+        MotionArtworkCache.shared.persistMotionArtworkEnabled = motionCacheEnabled
     }
 
     private static func normalizedCapacity(_ value: Int) -> Int {

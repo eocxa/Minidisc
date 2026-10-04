@@ -154,6 +154,7 @@ final class AppContainer {
         artworkImageCache = ArtworkImageCache(downloadService: download, libraryService: library)
         artworkImageCache.localArtworkProvider = { id in await localStore.artwork(id) }
         artworkImageCache.persistCoversEnabled = cacheSettings.cacheArtwork
+        MotionArtworkCache.shared.persistMotionArtworkEnabled = cacheSettings.cacheMotionArtwork
         offlineFavoritesSync = OfflineFavoritesSync(
             store: favoritesStore, settings: cacheSettings, streamSettings: streamSettings,
             server: server, downloads: download, cache: cache, artwork: artworkImageCache

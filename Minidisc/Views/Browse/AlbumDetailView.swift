@@ -47,13 +47,13 @@ struct AlbumDetailView: View {
         let albClean = album.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if let initialEnrichment,
            let enAlb = initialEnrichment.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-           !enAlb.isEmpty && !albClean.isEmpty && enAlb != albClean {
+           !enAlb.isEmpty && !albClean.isEmpty && enAlb == albClean {
+            _enrichment = State(initialValue: initialEnrichment)
+            let hasCachedVideo = initialEnrichment.animatedTallUrl != nil || initialEnrichment.animatedSquareUrl != nil
+            _isMotionVideoReady = State(initialValue: hasCachedVideo)
+        } else {
             _enrichment = State(initialValue: nil)
             _isMotionVideoReady = State(initialValue: false)
-        } else {
-            _enrichment = State(initialValue: initialEnrichment)
-            let hasCachedVideo = initialEnrichment?.animatedTallUrl != nil || initialEnrichment?.animatedSquareUrl != nil
-            _isMotionVideoReady = State(initialValue: hasCachedVideo)
         }
     }
 
@@ -76,13 +76,13 @@ struct AlbumDetailView: View {
         let albClean = albumName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if let initialEnrichment,
            let enAlb = initialEnrichment.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-           !enAlb.isEmpty && !albClean.isEmpty && enAlb != albClean {
+           !enAlb.isEmpty && !albClean.isEmpty && enAlb == albClean {
+            _enrichment = State(initialValue: initialEnrichment)
+            let hasCachedVideo = initialEnrichment.animatedTallUrl != nil || initialEnrichment.animatedSquareUrl != nil
+            _isMotionVideoReady = State(initialValue: hasCachedVideo)
+        } else {
             _enrichment = State(initialValue: nil)
             _isMotionVideoReady = State(initialValue: false)
-        } else {
-            _enrichment = State(initialValue: initialEnrichment)
-            let hasCachedVideo = initialEnrichment?.animatedTallUrl != nil || initialEnrichment?.animatedSquareUrl != nil
-            _isMotionVideoReady = State(initialValue: hasCachedVideo)
         }
     }
 
@@ -455,7 +455,7 @@ struct AlbumDetailView: View {
             if let cached = NowLocalService.shared.cachedEnrichment(album: album, artist: artist)
                 ?? NowLocalService.shared.cachedEnrichment(album: album, artist: nil) {
                 let enAlb = cached.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-                if enAlb.isEmpty || currentCleanAlbum.isEmpty || enAlb == currentCleanAlbum {
+                if !enAlb.isEmpty && !currentCleanAlbum.isEmpty && enAlb == currentCleanAlbum {
                     enrichment = cached
                     let hasCachedVideo = cached.animatedTallUrl != nil || cached.animatedSquareUrl != nil
                     isMotionVideoReady = hasCachedVideo
@@ -471,7 +471,7 @@ struct AlbumDetailView: View {
         // Verify fetched album strictly matches!
         if let f = fetched,
            let fAlb = f.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-           !fAlb.isEmpty && !currentCleanAlbum.isEmpty && fAlb != currentCleanAlbum {
+           fAlb != currentCleanAlbum {
             fetched = nil
         }
 
@@ -483,7 +483,7 @@ struct AlbumDetailView: View {
             )
             if let fallback, fallback.animatedTallUrl != nil || fallback.animatedSquareUrl != nil {
                 let fbAlb = fallback.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-                if fbAlb.isEmpty || currentCleanAlbum.isEmpty || fbAlb == currentCleanAlbum {
+                if !fbAlb.isEmpty && !currentCleanAlbum.isEmpty && fbAlb == currentCleanAlbum {
                     fetched = NowLocalEnrichment(
                         found: true,
                         trackId: fetched?.trackId ?? fallback.trackId,
@@ -501,28 +501,10 @@ struct AlbumDetailView: View {
                 }
             }
         }
-        if var effective = fetched {
-            if let existing = enrichment,
-               let exAlb = existing.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-               (exAlb.isEmpty || currentCleanAlbum.isEmpty || exAlb == currentCleanAlbum),
-               (effective.animatedTallUrl == nil && effective.animatedSquareUrl == nil) && (existing.animatedTallUrl != nil || existing.animatedSquareUrl != nil) {
-                effective = NowLocalEnrichment(
-                    found: effective.found,
-                    trackId: effective.trackId,
-                    title: effective.title,
-                    artist: effective.artist,
-                    album: effective.album,
-                    hasAnimatedArtwork: true,
-                    animatedSquareUrl: existing.animatedSquareUrl,
-                    animatedTallUrl: existing.animatedTallUrl,
-                    isAtmos: effective.isAtmos ?? existing.isAtmos,
-                    isLossless: effective.isLossless ?? existing.isLossless,
-                    lyricsUrl: effective.lyricsUrl,
-                    lyricsType: effective.lyricsType
-                )
-            }
+        if let effective = fetched {
             withAnimation(.easeInOut(duration: 0.35)) {
                 enrichment = effective
+                isMotionVideoReady = effective.animatedTallUrl != nil || effective.animatedSquareUrl != nil
             }
             NowLocalService.shared.storeCachedEnrichment(
                 effective,
@@ -532,13 +514,9 @@ struct AlbumDetailView: View {
                 ]
             )
         } else {
-            if let existing = enrichment,
-               let exAlb = existing.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-               !exAlb.isEmpty && !currentCleanAlbum.isEmpty && exAlb != currentCleanAlbum {
-                withAnimation(.easeInOut(duration: 0.35)) {
-                    enrichment = nil
-                    isMotionVideoReady = false
-                }
+            withAnimation(.easeInOut(duration: 0.35)) {
+                enrichment = nil
+                isMotionVideoReady = false
             }
         }
     }

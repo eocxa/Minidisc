@@ -176,10 +176,13 @@ struct StorageSettingsView: View {
     @State private var trackCount: Int = 0
     @State private var coverCount: Int = 0
     @State private var coverBytes: Int64 = 0
+    @State private var motionCount: Int = 0
+    @State private var motionBytes: Int64 = 0
     @State private var isClearingCache = false
     @State private var showClearDownloadsConfirm = false
     @State private var showClearCacheConfirm = false
     @State private var showClearArtworkConfirm = false
+    @State private var showClearMotionArtworkConfirm = false
 
     private var cacheSettings: CacheSettings? { container?.cacheSettings }
 
@@ -395,6 +398,41 @@ struct StorageSettingsView: View {
                 Text("Covers re-download on demand. Turning caching off keeps artwork in memory only.")
             }
 
+            Section {
+                LabeledContent {
+                    Text(motionCount == 1 ? "1 video · \(ByteCountFormatter.string(fromByteCount: motionBytes, countStyle: .file))" : "\(motionCount) videos · \(ByteCountFormatter.string(fromByteCount: motionBytes, countStyle: .file))")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                } label: {
+                    Text("Disk usage")
+                        .foregroundStyle(.primary)
+                }
+
+                if let cacheSettings {
+                    Toggle(isOn: Binding(
+                        get: { cacheSettings.cacheMotionArtwork },
+                        set: { newValue in
+                            cacheSettings.cacheMotionArtwork = newValue
+                        }
+                    )) {
+                        Text("Cache animated artwork")
+                            .foregroundStyle(.primary)
+                    }
+                    .tint(Color(.systemGreen))
+                }
+
+                Button(role: .destructive) {
+                    showClearMotionArtworkConfirm = true
+                } label: {
+                    Text("Clear animated artwork cache")
+                        .foregroundStyle(.red)
+                }
+            } header: {
+                Text("Animated artwork")
+            } footer: {
+                Text("Animated covers re-download on demand. Turning caching off keeps videos in memory only.")
+            }
+
             LibraryIndexStorageSection()
         }
         .formStyle(.grouped)
@@ -420,6 +458,12 @@ struct StorageSettingsView: View {
                 } message: {
                     Text("Cached covers are deleted. They re-download on demand.")
                 }
+                .alert("Clear animated artwork cache?", isPresented: $showClearMotionArtworkConfirm) {
+                    Button("Clear", role: .destructive) { Task { await clearMotionArtwork() } }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Cached animated covers are deleted. They re-download on demand.")
+                }
                 .tint(.primary)
         }
         .task {
@@ -442,6 +486,9 @@ struct StorageSettingsView: View {
         let stats = await container.downloadService.coverCacheStats()
         coverCount = stats.count
         coverBytes = stats.bytes
+        let motionStats = MotionArtworkCache.shared.motionArtworkStats()
+        motionCount = motionStats.count
+        motionBytes = motionStats.bytes
     }
 
     private func clearStreamCache() async {
@@ -460,6 +507,13 @@ struct StorageSettingsView: View {
         artworkImageCache.clearCache()
         artworkImageCache.clearRevalidationMetadata()
         await MotionArtworkCache.shared.clearCache()
+        await NowLocalService.shared.clearCache()
+        await refreshUsage()
+    }
+
+    private func clearMotionArtwork() async {
+        await MotionArtworkCache.shared.clearCache()
+        await NowLocalService.shared.clearCache()
         await refreshUsage()
     }
 }

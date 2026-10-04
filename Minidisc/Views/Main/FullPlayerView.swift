@@ -175,11 +175,14 @@ struct FullPlayerView: View {
                     let newAlbumClean = track.albumName?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                     let sameAlbum: Bool = {
                         if let prev = previousTrack {
-                            if let aid = track.albumId, let paid = prev.albumId, aid == paid { return true }
-                            if let cid = track.coverArtId, let pcid = prev.coverArtId, cid == pcid { return true }
-                            if let aname = track.albumName?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-                               let paname = prev.albumName?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-                               !aname.isEmpty && aname == paname {
+                            let paname = prev.albumName?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                            if let aname = newAlbumClean, let paname = paname, !aname.isEmpty && !paname.isEmpty && aname != paname {
+                                return false
+                            }
+                            if let aid = track.albumId, let paid = prev.albumId, !aid.isEmpty && !paid.isEmpty && aid == paid {
+                                return true
+                            }
+                            if let aname = newAlbumClean, let paname = paname, !aname.isEmpty && aname == paname {
                                 return true
                             }
                         }
@@ -212,7 +215,7 @@ struct FullPlayerView: View {
                     if sameAlbum && (cached == nil || (cached?.animatedTallUrl == nil && cached?.animatedSquareUrl == nil)) {
                         if let existing = currentTrackEnrichment {
                             let exAlb = existing.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                            if exAlb == nil || exAlb!.isEmpty || exAlb == newAlbumClean {
+                            if let curAlb = newAlbumClean, !curAlb.isEmpty && exAlb == curAlb {
                                 cached = NowLocalEnrichment(
                                     found: cached?.found ?? existing.found,
                                     trackId: cached?.trackId ?? existing.trackId,
@@ -291,7 +294,7 @@ struct FullPlayerView: View {
                     if var enrichment {
                         if sameAlbum, let existing = currentTrackEnrichment {
                             let exAlb = existing.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                            if exAlb == nil || exAlb!.isEmpty || exAlb == newAlbumClean {
+                            if let curAlb = newAlbumClean, !curAlb.isEmpty && exAlb == curAlb {
                                 if (enrichment.animatedTallUrl == nil && enrichment.animatedSquareUrl == nil) &&
                                     (existing.animatedTallUrl != nil || existing.animatedSquareUrl != nil) {
                                     enrichment = NowLocalEnrichment(
