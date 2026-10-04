@@ -148,6 +148,14 @@ Dependencies: [SwiftSonic](https://github.com/CassetteLab/swiftsonic) (MIT), whi
 
 > Code before commit 21f9227 used the GPL-3.0-or-later license.
 
+## Disclaimer
+
+All icons, logos, brand assets, and visual materials referenced or utilized in this project are used strictly for educational, personal, and illustrative demonstration purposes.
+
+- **Non-Commercial**: This project is completely free, open-source, and not intended for commercialization, monetization, sale, or profit in any way.
+- **No Copyright Infringement**: No copyright or trademark infringement is intended. All trademarks, service marks, product names, and company logos are the property of their respective owners.
+- **Illustrative & Fair Use**: Any UI design elements and iconography are provided strictly for non-commercial personal use and illustrative design reference.
+
 ## Acknowledgments
 
 - [Cassette](https://github.com/CassetteLab/cassette) by Mathieu Dubart, because Minidisc is a fork of Cassette.
