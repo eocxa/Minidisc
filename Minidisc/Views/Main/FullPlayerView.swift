@@ -48,7 +48,7 @@ struct FullPlayerView: View {
     @State private var isMotionArtworkReady = false
     @State private var areLyricsControlsHidden = false
     @State private var lyricsInactivityTask: Task<Void, Never>?
-    @State private var lastActivityTime: Date = Date()
+    @State private var previousTrack: DisplayableSong?
     @Namespace private var morphNS
 
     private var effectiveTrackEnrichment: NowLocalEnrichment? {
@@ -58,21 +58,41 @@ struct FullPlayerView: View {
             album: track?.albumName,
             artist: track?.artist,
             title: track?.title
+        ) ?? NowLocalService.shared.cachedEnrichment(
+            album: track?.albumName,
+            artist: nil,
+            title: nil
         )
     }
 
-    private var resolvedAnimatedCoverURL: URL? {
+    private var resolvedAnimatedTallURL: URL? {
         guard !UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_disabled") else { return nil }
         guard !showLyrics else { return nil }
-        let path = effectiveTrackEnrichment?.animatedTallUrl ?? effectiveTrackEnrichment?.animatedSquareUrl
         return NowLocalService.shared.resolveArtworkURL(
-            path: path,
+            path: effectiveTrackEnrichment?.animatedTallUrl,
             activeServerBaseURL: container?.serverState.activeServer?.baseURL
         )
     }
 
+    private var resolvedAnimatedSquareURL: URL? {
+        guard !UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_disabled") else { return nil }
+        guard !showLyrics else { return nil }
+        return NowLocalService.shared.resolveArtworkURL(
+            path: effectiveTrackEnrichment?.animatedSquareUrl,
+            activeServerBaseURL: container?.serverState.activeServer?.baseURL
+        )
+    }
+
+    private var resolvedAnimatedCoverURL: URL? {
+        resolvedAnimatedTallURL ?? resolvedAnimatedSquareURL
+    }
+
+    private var hasTallMotionCanvas: Bool {
+        resolvedAnimatedTallURL != nil
+    }
+
     private var hasMotionCanvas: Bool {
-        resolvedAnimatedCoverURL != nil
+        hasTallMotionCanvas
     }
 
     private var isCompact: Bool {
@@ -134,54 +154,60 @@ struct FullPlayerView: View {
                 .task(id: playerState.currentTrack?.id) {
                     guard let track = playerState.currentTrack else {
                         currentTrackEnrichment = nil
+                        previousTrack = nil
                         isMotionArtworkReady = false
                         return
                     }
 
-                    let currentAlbumClean = currentTrackEnrichment?.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                    let newAlbumClean = track.albumName?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                    let sameAlbum = newAlbumClean != nil && !newAlbumClean!.isEmpty && currentAlbumClean == newAlbumClean
+                    let sameAlbum: Bool = {
+                        if let prev = previousTrack {
+                            if let aid = track.albumId, let paid = prev.albumId, aid == paid { return true }
+                            if let cid = track.coverArtId, let pcid = prev.coverArtId, cid == pcid { return true }
+                            if let aname = track.albumName?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+                               let paname = prev.albumName?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+                               !aname.isEmpty && aname == paname {
+                                return true
+                            }
+                        }
+                        let currentAlbumClean = currentTrackEnrichment?.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                        let newAlbumClean = track.albumName?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                        return newAlbumClean != nil && !newAlbumClean!.isEmpty && currentAlbumClean == newAlbumClean
+                    }()
 
                     if !sameAlbum {
                         isMotionArtworkReady = false
                     }
 
-                    if var cached = NowLocalService.shared.cachedEnrichment(
+                    var cached = NowLocalService.shared.cachedEnrichment(
                         album: track.albumName,
                         artist: track.artist,
                         title: track.title
-                    ) {
-                        if sameAlbum, let existingTall = currentTrackEnrichment?.animatedTallUrl {
+                    ) ?? NowLocalService.shared.cachedEnrichment(
+                        album: track.albumName,
+                        artist: nil,
+                        title: nil
+                    )
+
+                    if sameAlbum && (cached == nil || (cached?.animatedTallUrl == nil && cached?.animatedSquareUrl == nil)) {
+                        if let existing = currentTrackEnrichment {
                             cached = NowLocalEnrichment(
-                                found: cached.found,
-                                trackId: cached.trackId,
-                                title: cached.title,
-                                artist: cached.artist,
-                                album: cached.album,
-                                hasAnimatedArtwork: cached.hasAnimatedArtwork,
-                                animatedSquareUrl: currentTrackEnrichment?.animatedSquareUrl ?? cached.animatedSquareUrl,
-                                animatedTallUrl: existingTall,
-                                isAtmos: cached.isAtmos,
-                                isLossless: cached.isLossless,
-                                lyricsUrl: cached.lyricsUrl,
-                                lyricsType: cached.lyricsType
-                            )
-                        } else if sameAlbum, let existingSquare = currentTrackEnrichment?.animatedSquareUrl {
-                            cached = NowLocalEnrichment(
-                                found: cached.found,
-                                trackId: cached.trackId,
-                                title: cached.title,
-                                artist: cached.artist,
-                                album: cached.album,
-                                hasAnimatedArtwork: cached.hasAnimatedArtwork,
-                                animatedSquareUrl: existingSquare,
-                                animatedTallUrl: cached.animatedTallUrl,
-                                isAtmos: cached.isAtmos,
-                                isLossless: cached.isLossless,
-                                lyricsUrl: cached.lyricsUrl,
-                                lyricsType: cached.lyricsType
+                                found: cached?.found ?? existing.found,
+                                trackId: cached?.trackId ?? existing.trackId,
+                                title: cached?.title,
+                                artist: cached?.artist ?? existing.artist,
+                                album: cached?.album ?? existing.album,
+                                hasAnimatedArtwork: true,
+                                animatedSquareUrl: existing.animatedSquareUrl ?? cached?.animatedSquareUrl,
+                                animatedTallUrl: existing.animatedTallUrl ?? cached?.animatedTallUrl,
+                                isAtmos: cached?.isAtmos ?? existing.isAtmos,
+                                isLossless: cached?.isLossless ?? existing.isLossless,
+                                lyricsUrl: cached?.lyricsUrl,
+                                lyricsType: cached?.lyricsType
                             )
                         }
+                    }
+
+                    if let cached {
                         currentTrackEnrichment = cached
                     }
 
@@ -191,10 +217,15 @@ struct FullPlayerView: View {
                         title: track.title,
                         activeServerBaseURL: container?.serverState.activeServer?.baseURL
                     )
-                    if enrichment?.animatedTallUrl == nil, let album = track.albumName, !album.isEmpty {
+                    if (enrichment?.animatedTallUrl == nil && enrichment?.animatedSquareUrl == nil), let album = track.albumName, !album.isEmpty {
                         let albumEnrichment = await NowLocalService.shared.fetchEnrichment(
                             album: album,
                             artist: track.artist,
+                            title: nil,
+                            activeServerBaseURL: container?.serverState.activeServer?.baseURL
+                        ) ?? await NowLocalService.shared.fetchEnrichment(
+                            album: album,
+                            artist: nil,
                             title: nil,
                             activeServerBaseURL: container?.serverState.activeServer?.baseURL
                         )
@@ -216,41 +247,38 @@ struct FullPlayerView: View {
                         }
                     }
                     if var enrichment {
-                        if sameAlbum, let existingTall = currentTrackEnrichment?.animatedTallUrl {
-                            enrichment = NowLocalEnrichment(
-                                found: enrichment.found,
-                                trackId: enrichment.trackId,
-                                title: enrichment.title,
-                                artist: enrichment.artist,
-                                album: enrichment.album,
-                                hasAnimatedArtwork: enrichment.hasAnimatedArtwork,
-                                animatedSquareUrl: currentTrackEnrichment?.animatedSquareUrl ?? enrichment.animatedSquareUrl,
-                                animatedTallUrl: existingTall,
-                                isAtmos: enrichment.isAtmos,
-                                isLossless: enrichment.isLossless,
-                                lyricsUrl: enrichment.lyricsUrl,
-                                lyricsType: enrichment.lyricsType
-                            )
-                        } else if sameAlbum, let existingSquare = currentTrackEnrichment?.animatedSquareUrl {
-                            enrichment = NowLocalEnrichment(
-                                found: enrichment.found,
-                                trackId: enrichment.trackId,
-                                title: enrichment.title,
-                                artist: enrichment.artist,
-                                album: enrichment.album,
-                                hasAnimatedArtwork: enrichment.hasAnimatedArtwork,
-                                animatedSquareUrl: existingSquare,
-                                animatedTallUrl: enrichment.animatedTallUrl,
-                                isAtmos: enrichment.isAtmos,
-                                isLossless: enrichment.isLossless,
-                                lyricsUrl: enrichment.lyricsUrl,
-                                lyricsType: enrichment.lyricsType
-                            )
+                        if sameAlbum, let existing = currentTrackEnrichment {
+                            if (enrichment.animatedTallUrl == nil && enrichment.animatedSquareUrl == nil) &&
+                                (existing.animatedTallUrl != nil || existing.animatedSquareUrl != nil) {
+                                enrichment = NowLocalEnrichment(
+                                    found: enrichment.found,
+                                    trackId: enrichment.trackId,
+                                    title: enrichment.title,
+                                    artist: enrichment.artist,
+                                    album: enrichment.album,
+                                    hasAnimatedArtwork: true,
+                                    animatedSquareUrl: existing.animatedSquareUrl,
+                                    animatedTallUrl: existing.animatedTallUrl,
+                                    isAtmos: enrichment.isAtmos ?? existing.isAtmos,
+                                    isLossless: enrichment.isLossless ?? existing.isLossless,
+                                    lyricsUrl: enrichment.lyricsUrl,
+                                    lyricsType: enrichment.lyricsType
+                                )
+                            }
                         }
+                        NowLocalService.shared.storeCachedEnrichment(
+                            enrichment,
+                            forKeys: [
+                                "\(track.albumName ?? "")_\(track.artist ?? "")_\(track.title)",
+                                "\(track.albumName ?? "")_\(track.artist ?? "")_",
+                                "\(track.albumName ?? "")__"
+                            ]
+                        )
                         withAnimation(.easeInOut(duration: 0.35)) {
                             currentTrackEnrichment = enrichment
                         }
                     }
+                    previousTrack = track
                 }
                 .sheet(item: $playlistAddition.request) { request in
                     AddToPlaylistSheet(request: request)

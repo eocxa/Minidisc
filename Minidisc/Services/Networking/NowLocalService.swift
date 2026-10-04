@@ -174,15 +174,42 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
                 return exact
             }
             if !alb.isEmpty {
-                return cache.first(where: { (k, _) in
+                if let prefixMatch = cache.first(where: { (k, _) in
                     (k.hasPrefix("\(alb)_") && k.hasSuffix("_")) || k == "\(alb)__"
-                })?.value
+                })?.value {
+                    return prefixMatch
+                }
+                // Check if any track from this album has animated artwork cached
+                if let trackWithMotion = cache.first(where: { (k, v) in
+                    k.hasPrefix("\(alb)_") && (v.animatedTallUrl != nil || v.animatedSquareUrl != nil)
+                })?.value {
+                    return stripLyrics(trackWithMotion)
+                }
             }
             return nil
         }
 
         if !tit.isEmpty {
             if let exact = cache[trackKey] {
+                // If track is cached without motion artwork, inherit from album if available
+                if exact.animatedTallUrl == nil && exact.animatedSquareUrl == nil,
+                   let albumEnrichment = findAlbumEnrichment(),
+                   albumEnrichment.animatedTallUrl != nil || albumEnrichment.animatedSquareUrl != nil {
+                    return NowLocalEnrichment(
+                        found: exact.found,
+                        trackId: exact.trackId,
+                        title: exact.title,
+                        artist: exact.artist,
+                        album: exact.album,
+                        hasAnimatedArtwork: true,
+                        animatedSquareUrl: albumEnrichment.animatedSquareUrl,
+                        animatedTallUrl: albumEnrichment.animatedTallUrl,
+                        isAtmos: exact.isAtmos,
+                        isLossless: exact.isLossless,
+                        lyricsUrl: exact.lyricsUrl,
+                        lyricsType: exact.lyricsType
+                    )
+                }
                 return exact
             }
             if let albumEnrichment = findAlbumEnrichment() {
@@ -220,6 +247,35 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
                 }
             } else {
                 cache[k.lowercased()] = enrichment
+                if enrichment.animatedTallUrl != nil || enrichment.animatedSquareUrl != nil {
+                    // Propagate motion artwork to the album level keys so all tracks & album detail benefit
+                    let parts = k.lowercased().split(separator: "_", omittingEmptySubsequences: false)
+                    if parts.count >= 2, let first = parts.first, !first.isEmpty {
+                        let second = parts[1]
+                        let albKey = "\(first)_\(second)_"
+                        let albOnlyKey = "\(first)__"
+                        let albumLevel = NowLocalEnrichment(
+                            found: enrichment.found,
+                            trackId: nil,
+                            title: nil,
+                            artist: enrichment.artist,
+                            album: enrichment.album,
+                            hasAnimatedArtwork: true,
+                            animatedSquareUrl: enrichment.animatedSquareUrl,
+                            animatedTallUrl: enrichment.animatedTallUrl,
+                            isAtmos: enrichment.isAtmos,
+                            isLossless: enrichment.isLossless,
+                            lyricsUrl: nil,
+                            lyricsType: nil
+                        )
+                        if cache[albKey] == nil || (cache[albKey]?.animatedTallUrl == nil && cache[albKey]?.animatedSquareUrl == nil) {
+                            cache[albKey] = albumLevel
+                        }
+                        if cache[albOnlyKey] == nil || (cache[albOnlyKey]?.animatedTallUrl == nil && cache[albOnlyKey]?.animatedSquareUrl == nil) {
+                            cache[albOnlyKey] = albumLevel
+                        }
+                    }
+                }
             }
         }
         let snapshot = cache

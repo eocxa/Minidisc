@@ -17,6 +17,7 @@ struct SongRow: View {
     var secondaryText: String? = nil
     var coverArtSize: CGFloat = 44
     var coverArtCornerRadius: CGFloat = MinidiscCornerRadius.standard
+    var verticalPadding: CGFloat? = nil
     var primaryContentSpacing: CGFloat = MinidiscSpacing.s
     var isFavorite: Bool = false
     var titleColor: Color = .primary
@@ -41,7 +42,7 @@ struct SongRow: View {
     @State private var preparedShare: PreparedTrackShare?
     @State private var trackInformation: DisplayableSong?
 
-    init(song: DisplayableSong, index: Int, showCoverArt: Bool = false, showArtist: Bool = true, secondaryText: String? = nil, coverArtSize: CGFloat = 44, coverArtCornerRadius: CGFloat = MinidiscCornerRadius.standard, primaryContentSpacing: CGFloat = MinidiscSpacing.s, isFavorite: Bool = false, titleColor: Color = .primary, secondaryColor: Color = .secondary, trailingAccessory: SongRowTrailingAccessory = .duration, menuAccessibilityIdentifier: String = "", onDownload: (() -> Void)? = nil, onRemoveDownload: (() -> Void)? = nil, isDownloading: Bool = false, onRemoveFromPlaylist: (() -> Void)? = nil, onAddToPlaylist: ((DisplayableSong) -> Void)? = nil, onGoToAlbum: (() -> Void)? = nil, onTap: (() -> Void)? = nil) {
+    init(song: DisplayableSong, index: Int, showCoverArt: Bool = false, showArtist: Bool = true, secondaryText: String? = nil, coverArtSize: CGFloat = 44, coverArtCornerRadius: CGFloat = MinidiscCornerRadius.standard, verticalPadding: CGFloat? = nil, primaryContentSpacing: CGFloat = MinidiscSpacing.s, isFavorite: Bool = false, titleColor: Color = .primary, secondaryColor: Color = .secondary, trailingAccessory: SongRowTrailingAccessory = .duration, menuAccessibilityIdentifier: String = "", onDownload: (() -> Void)? = nil, onRemoveDownload: (() -> Void)? = nil, isDownloading: Bool = false, onRemoveFromPlaylist: (() -> Void)? = nil, onAddToPlaylist: ((DisplayableSong) -> Void)? = nil, onGoToAlbum: (() -> Void)? = nil, onTap: (() -> Void)? = nil) {
         self.song = song
         self.index = index
         self.showCoverArt = showCoverArt
@@ -49,6 +50,7 @@ struct SongRow: View {
         self.secondaryText = secondaryText
         self.coverArtSize = coverArtSize
         self.coverArtCornerRadius = coverArtCornerRadius
+        self.verticalPadding = verticalPadding
         self.primaryContentSpacing = primaryContentSpacing
         self.isFavorite = isFavorite
         self.titleColor = titleColor
@@ -98,7 +100,7 @@ struct SongRow: View {
 
             trailingContent
         }
-        .padding(.vertical, trailingAccessory == .menu ? 0 : MinidiscSpacing.s)
+        .padding(.vertical, verticalPadding ?? (trailingAccessory == .menu ? 0 : MinidiscSpacing.s))
         .contentShape(Rectangle())
         .task(id: song.id) {
             coverImage = await artworkImageCache.load(coverArtId: song.coverArtId ?? song.id)

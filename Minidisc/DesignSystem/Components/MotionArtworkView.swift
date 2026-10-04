@@ -47,21 +47,26 @@ struct MotionArtworkView: View {
     @ViewBuilder
     private var content: some View {
         ZStack {
-            // Capa estática base de la portada (siempre presente para transición suave y mientras carga el video)
-            CoverArtView(
-                id: fallbackId,
-                size: 800,
-                tier: .hero,
-                cornerRadius: cornerRadius,
-                initialImage: fallbackImage
-            )
-            .aspectRatio(1, contentMode: .fit)
+            if let videoURL, let firstFrame = MotionArtworkCache.shared.firstFrame(for: videoURL) {
+                Image(platformImage: firstFrame)
+                    .resizable()
+                    .aspectRatio(contentMode: aspectRatio != nil ? .fit : .fill)
+            } else {
+                CoverArtView(
+                    id: fallbackId,
+                    size: 800,
+                    tier: .hero,
+                    cornerRadius: cornerRadius,
+                    initialImage: fallbackImage
+                )
+                .aspectRatio(aspectRatio ?? 1, contentMode: aspectRatio != nil ? .fit : .fill)
+            }
 
             // Capa de video animado en bucle si existe URL
             if let videoURL {
                 LoopingVideoPlayerRepresentable(videoURL: videoURL, isPaused: isPaused, onReady: {
                     if !isVideoReady {
-                        withAnimation(.easeInOut(duration: 0.35)) {
+                        withAnimation(.easeInOut(duration: 0.25)) {
                             isVideoReady = true
                         }
                     }
@@ -98,7 +103,7 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
     }
 
     static func dismantleUIView(_ uiView: PlayerContainerUIView, coordinator: Coordinator) {
-        coordinator.cleanup()
+        coordinator.pauseForDismissal()
     }
 
     @MainActor
@@ -126,6 +131,20 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
                 name: UIApplication.willEnterForegroundNotification,
                 object: nil
             )
+        }
+
+        func pauseForDismissal() {
+            // Keep the current video frame on AVPlayerLayer during dismissal.
+            // Do NOT remove the player from the layer, which would reveal the static cover.
+            player?.pause()
+            readyObserver?.invalidate()
+            readyObserver = nil
+            readyForDisplayObserver?.invalidate()
+            readyForDisplayObserver = nil
+            if let endObserver {
+                NotificationCenter.default.removeObserver(endObserver)
+                self.endObserver = nil
+            }
         }
 
         private func cleanCurrentItem() {

@@ -1,12 +1,37 @@
 import Foundation
 import CryptoKit
 import OSLog
+import AVFoundation
+
+private nonisolated final class FirstFrameMemoryCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cache: [String: PlatformImage] = [:]
+
+    nonisolated func get(_ key: String) -> PlatformImage? {
+        lock.lock()
+        defer { lock.unlock() }
+        return cache[key]
+    }
+
+    nonisolated func set(_ image: PlatformImage, for key: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        cache[key] = image
+    }
+
+    nonisolated func removeAll() {
+        lock.lock()
+        defer { lock.unlock() }
+        cache.removeAll()
+    }
+}
 
 actor MotionArtworkCache {
     static let shared = MotionArtworkCache()
 
     private let cacheDirectory: URL
     private var inFlightDownloads: [URL: Task<URL, Error>] = [:]
+    nonisolated private static let firstFrames = FirstFrameMemoryCache()
 
     init() {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -46,8 +71,29 @@ actor MotionArtworkCache {
         return nil
     }
 
+    nonisolated func firstFrame(for remoteURL: URL) -> PlatformImage? {
+        let key = Self.cacheKey(for: remoteURL)
+        if let memory = Self.firstFrames.get(key) {
+            return memory
+        }
+
+        guard let local = cachedURL(for: remoteURL) else { return nil }
+
+        let asset = AVURLAsset(url: local)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 800, height: 800)
+        if let cgImage = try? generator.copyCGImage(at: .zero, actualTime: nil) {
+            let img = PlatformImage(cgImage: cgImage)
+            Self.firstFrames.set(img, for: key)
+            return img
+        }
+        return nil
+    }
+
     func loadOrDownload(for remoteURL: URL) async throws -> URL {
         if let local = cachedURL(for: remoteURL) {
+            _ = firstFrame(for: remoteURL)
             return local
         }
         if let existing = inFlightDownloads[remoteURL] {
@@ -61,6 +107,7 @@ actor MotionArtworkCache {
             let dest = self.localFileURL(for: remoteURL)
             try? FileManager.default.removeItem(at: dest)
             try FileManager.default.moveItem(at: tempURL, to: dest)
+            _ = self.firstFrame(for: remoteURL)
             return dest
         }
         inFlightDownloads[remoteURL] = task
@@ -69,6 +116,7 @@ actor MotionArtworkCache {
     }
 
     func clearCache() {
+        Self.firstFrames.removeAll()
         try? FileManager.default.removeItem(at: cacheDirectory)
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
     }

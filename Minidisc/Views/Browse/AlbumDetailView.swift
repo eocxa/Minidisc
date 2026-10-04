@@ -43,6 +43,7 @@ struct AlbumDetailView: View {
         self.mode = mode
         _dominantColor = State(initialValue: initialDominantColor)
         let initialEnrichment = NowLocalService.shared.cachedEnrichment(album: album.name, artist: album.artist)
+            ?? NowLocalService.shared.cachedEnrichment(album: album.name, artist: nil)
         _enrichment = State(initialValue: initialEnrichment)
         let hasCachedVideo = initialEnrichment?.animatedTallUrl != nil || initialEnrichment?.animatedSquareUrl != nil
         _isMotionVideoReady = State(initialValue: hasCachedVideo)
@@ -91,6 +92,7 @@ struct AlbumDetailView: View {
         let album = viewModel?.albumName ?? initialName
         let artist = viewModel?.artistName ?? initialArtistName
         return NowLocalService.shared.cachedEnrichment(album: album, artist: artist)
+            ?? NowLocalService.shared.cachedEnrichment(album: album, artist: nil)
     }
 
     private var resolvedAnimatedSquareURL: URL? {
@@ -411,16 +413,63 @@ struct AlbumDetailView: View {
         let artist = viewModel?.artistName ?? initialArtistName
         if enrichment == nil {
             enrichment = NowLocalService.shared.cachedEnrichment(album: album, artist: artist)
+                ?? NowLocalService.shared.cachedEnrichment(album: album, artist: nil)
         }
-        let fetched = await NowLocalService.shared.fetchEnrichment(
+        var fetched = await NowLocalService.shared.fetchEnrichment(
             album: album,
             artist: artist,
             activeServerBaseURL: container?.serverState.activeServer?.baseURL
         )
-        if let fetched {
-            withAnimation(.easeInOut(duration: 0.35)) {
-                enrichment = fetched
+        if (fetched?.animatedTallUrl == nil && fetched?.animatedSquareUrl == nil) && !album.isEmpty {
+            let fallback = await NowLocalService.shared.fetchEnrichment(
+                album: album,
+                artist: nil,
+                activeServerBaseURL: container?.serverState.activeServer?.baseURL
+            )
+            if let fallback, fallback.animatedTallUrl != nil || fallback.animatedSquareUrl != nil {
+                fetched = NowLocalEnrichment(
+                    found: true,
+                    trackId: fetched?.trackId ?? fallback.trackId,
+                    title: fetched?.title ?? fallback.title,
+                    artist: fetched?.artist ?? fallback.artist ?? artist,
+                    album: fetched?.album ?? fallback.album ?? album,
+                    hasAnimatedArtwork: true,
+                    animatedSquareUrl: fallback.animatedSquareUrl ?? fetched?.animatedSquareUrl,
+                    animatedTallUrl: fallback.animatedTallUrl ?? fetched?.animatedTallUrl,
+                    isAtmos: fetched?.isAtmos ?? fallback.isAtmos,
+                    isLossless: fetched?.isLossless ?? fallback.isLossless,
+                    lyricsUrl: fetched?.lyricsUrl ?? fallback.lyricsUrl,
+                    lyricsType: fetched?.lyricsType ?? fallback.lyricsType
+                )
             }
+        }
+        if var effective = fetched {
+            if let existing = enrichment, (effective.animatedTallUrl == nil && effective.animatedSquareUrl == nil) && (existing.animatedTallUrl != nil || existing.animatedSquareUrl != nil) {
+                effective = NowLocalEnrichment(
+                    found: effective.found,
+                    trackId: effective.trackId,
+                    title: effective.title,
+                    artist: effective.artist,
+                    album: effective.album,
+                    hasAnimatedArtwork: true,
+                    animatedSquareUrl: existing.animatedSquareUrl,
+                    animatedTallUrl: existing.animatedTallUrl,
+                    isAtmos: effective.isAtmos ?? existing.isAtmos,
+                    isLossless: effective.isLossless ?? existing.isLossless,
+                    lyricsUrl: effective.lyricsUrl,
+                    lyricsType: effective.lyricsType
+                )
+            }
+            withAnimation(.easeInOut(duration: 0.35)) {
+                enrichment = effective
+            }
+            NowLocalService.shared.storeCachedEnrichment(
+                effective,
+                forKeys: [
+                    "\(album)_\(artist ?? "")_",
+                    "\(album)__"
+                ]
+            )
         }
     }
 
