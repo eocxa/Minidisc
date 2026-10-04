@@ -15,7 +15,6 @@ private struct PlayerThemeKey: Equatable {
 private struct LyricsLoadKey: Equatable {
     let trackID: String?
     let source: LyricsSource
-    let isRequested: Bool
 }
 
 private struct FullPlayerBackground: View {
@@ -40,7 +39,11 @@ struct FullPlayerView: View {
 
     @State private var vm = FullPlayerViewModel()
     @State private var playlistAddition = PlaylistAddition()
-    @AppStorage("minidisc_player_show_lyrics") private var showLyrics = false
+    @AppStorage("minidisc_player_show_lyrics") private var userWantsLyrics = false
+    @State private var trackHasLyrics: Bool = true
+    private var showLyrics: Bool {
+        userWantsLyrics && trackHasLyrics && surface == .player && !(container?.playerState.isLiveStream ?? false)
+    }
     @State private var surface: PlayerSurface = .player
     @State private var lyricsViewModel: LyricsViewModel?
     @State private var trackSwipe = TrackSwipeInteraction()
@@ -127,8 +130,7 @@ struct FullPlayerView: View {
             let lyricsSource = container?.lyricsSettings.source ?? .automatic
             let lyricsLoadKey = LyricsLoadKey(
                 trackID: playerState.currentTrack?.id,
-                source: lyricsSource,
-                isRequested: showLyrics
+                source: lyricsSource
             )
             let themeCoverId: String? = playerState.isLiveStream
                 ? playerState.currentRadio?.coverArt
@@ -139,18 +141,39 @@ struct FullPlayerView: View {
                 }
                 .task(id: lyricsLoadKey) {
                     if playerState.currentTrack?.isLocalFile == true {
-                        showLyrics = false
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                            trackHasLyrics = false
+                        }
                         lyricsViewModel = nil
                         return
                     }
-                    guard showLyrics,
-                          let track = playerState.currentTrack, !track.isLocalFile,
+                    guard let track = playerState.currentTrack, !track.isLocalFile,
                           let serverId = container?.serverState.activeServer?.id,
                           let lyricsService = container?.lyricsService,
                           let playerService = container?.playerService else {
                         lyricsViewModel = nil
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                            trackHasLyrics = false
+                        }
                         return
                     }
+
+                    // Check fast cache first
+                    let cachedEnrichment = NowLocalService.shared.cachedEnrichment(
+                        album: track.albumName,
+                        artist: track.artist,
+                        title: track.title
+                    )
+                    if let cachedEnrichment {
+                        if cachedEnrichment.lyricsUrl != nil && cachedEnrichment.lyricsType != "none" {
+                            if !trackHasLyrics {
+                                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                                    trackHasLyrics = true
+                                }
+                            }
+                        }
+                    }
+
                     let newVM = LyricsViewModel(
                         track: track,
                         serverId: serverId,
@@ -160,9 +183,18 @@ struct FullPlayerView: View {
                         playerState: playerState,
                         activeServerBaseURL: container?.serverState.activeServer?.baseURL
                     )
-                    newVM.setVisible(true)
+                    newVM.setVisible(showLyrics)
                     lyricsViewModel = newVM
                     await newVM.load()
+
+                    guard !Task.isCancelled else { return }
+
+                    let available = newVM.hasLyrics
+                    if trackHasLyrics != available {
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                            trackHasLyrics = available
+                        }
+                    }
                 }
                 .task(id: playerState.currentTrack?.id) {
                     guard let track = playerState.currentTrack else {
@@ -372,12 +404,21 @@ struct FullPlayerView: View {
                 lyricsInactivityTask?.cancel()
             }
             .onChange(of: showLyrics, initial: true) { _, isShowing in
+                lyricsViewModel?.setVisible(isShowing)
                 if isShowing {
                     areLyricsControlsHidden = false
                     startInactivityTimer()
                 } else {
                     lyricsInactivityTask?.cancel()
                     areLyricsControlsHidden = false
+                }
+            }
+            .onChange(of: lyricsViewModel?.hasLyrics) { _, _ in
+                guard let vm = lyricsViewModel, !vm.isLoading else { return }
+                if trackHasLyrics != vm.hasLyrics {
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                        trackHasLyrics = vm.hasLyrics
+                    }
                 }
             }
             .onChange(of: surface) { _, newSurface in
@@ -493,7 +534,9 @@ struct FullPlayerView: View {
 
             if !showLyrics || !areLyricsControlsHidden {
                 BottomToolbar(
-                    showLyrics: $showLyrics,
+                    userWantsLyrics: $userWantsLyrics,
+                    isLyricsShowing: showLyrics,
+                    hasLyrics: trackHasLyrics,
                     surface: $surface,
                     isLiveStream: playerState.isLiveStream,
                     secondaryContentColor: vm.secondaryContentColor,
@@ -609,7 +652,7 @@ struct FullPlayerView: View {
                     .contentShape(Rectangle())
                     .onTapGesture {
                         withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                            showLyrics = false
+                            userWantsLyrics = false
                         }
                     }
 
@@ -1390,7 +1433,9 @@ private struct PlaybackControlsView: View {
 // MARK: - Bottom toolbar
 
 private struct BottomToolbar: View {
-    @Binding var showLyrics: Bool
+    @Binding var userWantsLyrics: Bool
+    let isLyricsShowing: Bool
+    let hasLyrics: Bool
     @Binding var surface: PlayerSurface
     let isLiveStream: Bool
     let secondaryContentColor: Color
@@ -1401,17 +1446,25 @@ private struct BottomToolbar: View {
         HStack(spacing: MinidiscSpacing.xxxxl) {
             if !isLiveStream {
                 Button {
-                    if surface == .queue { surface = .player }
-                    withAnimation(.smooth(duration: 0.3)) { showLyrics.toggle() }
+                    if surface == .queue {
+                        surface = .player
+                        userWantsLyrics = true
+                    } else {
+                        withAnimation(.smooth(duration: 0.3)) { userWantsLyrics.toggle() }
+                    }
                 } label: {
                     Image(systemName: "quote.bubble")
                         .font(.title3)
-                        .foregroundStyle(showLyrics && surface == .player ? accentColor : secondaryContentColor)
+                        .foregroundStyle(
+                            isLyricsShowing && surface == .player
+                                ? accentColor
+                                : (hasLyrics ? secondaryContentColor : secondaryContentColor.opacity(0.35))
+                        )
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Lyrics")
-                .disabled(playerState.currentTrack?.isLocalFile == true)
+                .disabled(!hasLyrics || playerState.currentTrack?.isLocalFile == true)
             }
 
             AirPlayRouteButton(tintColor: secondaryContentColor)
@@ -1423,7 +1476,6 @@ private struct BottomToolbar: View {
                         surface = .player
                     } else {
                         surface = .queue
-                        showLyrics = false
                     }
                 } label: {
                     Image(systemName: "list.bullet")

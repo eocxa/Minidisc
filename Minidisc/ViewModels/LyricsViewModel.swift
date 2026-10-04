@@ -61,6 +61,21 @@ final class LyricsViewModel {
         case error(String)
     }
 
+    var hasLyrics: Bool {
+        switch state {
+        case .loaded(let structured):
+            return !structured.line.isEmpty
+        case .loadedTTML(let ttml):
+            return !ttml.lyrics.isEmpty
+        default:
+            return false
+        }
+    }
+
+    var isLoading: Bool {
+        state == .loading
+    }
+
     init(
         track: DisplayableSong,
         serverId: UUID,
