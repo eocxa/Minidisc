@@ -172,6 +172,7 @@ struct FullPlayerView: View {
                         return
                     }
 
+                    let newAlbumClean = track.albumName?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                     let sameAlbum: Bool = {
                         if let prev = previousTrack {
                             if let aid = track.albumId, let paid = prev.albumId, aid == paid { return true }
@@ -183,7 +184,6 @@ struct FullPlayerView: View {
                             }
                         }
                         let currentAlbumClean = currentTrackEnrichment?.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                        let newAlbumClean = track.albumName?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                         return newAlbumClean != nil && !newAlbumClean!.isEmpty && currentAlbumClean == newAlbumClean
                     }()
 
