@@ -204,7 +204,7 @@ struct SearchHistoryEntryRow: View, Equatable {
 
         Button {
             Task {
-                await container?.playerService.insertNext(track: song)
+                await container?.playerService.playNext(song)
                 container?.toastService.show(String(localized: "Playing Next"), subtitle: song.title, style: .success)
             }
         } label: {
@@ -213,7 +213,7 @@ struct SearchHistoryEntryRow: View, Equatable {
 
         Button {
             Task {
-                await container?.playerService.appendToQueue(tracks: [song])
+                await container?.playerService.addToQueue(song)
                 container?.toastService.show(String(localized: "Playing Last"), subtitle: song.title, style: .success)
             }
         } label: {

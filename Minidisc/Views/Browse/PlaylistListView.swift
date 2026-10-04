@@ -83,6 +83,7 @@ struct PlaylistListView: View {
                             )) {
                                 RecentlyAddedPlaylistRow(coverArtId: newest.coverArt ?? newest.id)
                             }
+                            .listRowInsets(EdgeInsets(top: 5, leading: MinidiscSpacing.xl, bottom: 5, trailing: MinidiscSpacing.s))
                         }
                         ForEach(vm.bestOfPlaylists) { bestOf in
                             NavigationLink(value: HomeDestination.artistBestOf(
@@ -92,6 +93,7 @@ struct PlaylistListView: View {
                             )) {
                                 BestOfPlaylistRow(bestOf: bestOf)
                             }
+                            .listRowInsets(EdgeInsets(top: 5, leading: MinidiscSpacing.xl, bottom: 5, trailing: MinidiscSpacing.s))
                         }
                     }
                 }
@@ -104,6 +106,7 @@ struct PlaylistListView: View {
                 }
             }
             .listStyle(.plain)
+            .environment(\.defaultMinListRowHeight, 58)
             .refreshable {
                 await vm.load()
                 await vm.loadBestOf()
@@ -126,6 +129,7 @@ struct PlaylistListView: View {
                     onActionCompleted: { Task { await vm.load() } }
                 )
             }
+            .listRowInsets(EdgeInsets(top: 5, leading: MinidiscSpacing.xl, bottom: 5, trailing: MinidiscSpacing.s))
         }
     }
 }
@@ -153,7 +157,7 @@ private struct OnlinePlaylistRow: View {
 
     var body: some View {
         HStack(spacing: MinidiscSpacing.m) {
-            PlaylistCoverThumbnail(playlistId: playlist.id, serverId: nil, coverArtId: playlist.coverArt ?? playlist.id, title: playlist.name, size: 56)
+            PlaylistCoverThumbnail(playlistId: playlist.id, serverId: nil, coverArtId: playlist.coverArt ?? playlist.id, title: playlist.name, size: 48)
                 .minidiscMatchedTransitionSource(id: playlist.id, in: namespace)
             VStack(alignment: .leading, spacing: 2) {
                 Text(playlist.name)
@@ -165,7 +169,7 @@ private struct OnlinePlaylistRow: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, MinidiscSpacing.xs)
+        .padding(.vertical, 0)
         .task(id: playlist.id) {
             coverImage = await artworkImageCache.load(coverArtId: playlist.coverArt ?? playlist.id)
         }
@@ -208,8 +212,8 @@ private struct RecentlyAddedPlaylistRow: View {
 
     var body: some View {
         HStack(spacing: MinidiscSpacing.m) {
-            CoverArtView(id: coverArtId, size: 112)
-                .frame(width: 56, height: 56)
+            CoverArtView(id: coverArtId, size: 96)
+                .frame(width: 48, height: 48)
                 .clipShape(RoundedRectangle(cornerRadius: MinidiscCornerRadius.standard, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text("Recently Added")
@@ -223,7 +227,7 @@ private struct RecentlyAddedPlaylistRow: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, MinidiscSpacing.xs)
+        .padding(.vertical, 0)
     }
 }
 
@@ -235,8 +239,8 @@ private struct BestOfPlaylistRow: View {
 
     var body: some View {
         HStack(spacing: MinidiscSpacing.m) {
-            CoverArtView(id: bestOf.coverArtId ?? bestOf.artistId, size: 112)
-                .frame(width: 56, height: 56)
+            CoverArtView(id: bestOf.coverArtId ?? bestOf.artistId, size: 96)
+                .frame(width: 48, height: 48)
                 .clipShape(RoundedRectangle(cornerRadius: MinidiscCornerRadius.standard, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text("The best of \(bestOf.artistName)")
@@ -248,7 +252,7 @@ private struct BestOfPlaylistRow: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, MinidiscSpacing.xs)
+        .padding(.vertical, 0)
     }
 }
 

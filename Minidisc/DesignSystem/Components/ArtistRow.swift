@@ -3,15 +3,17 @@ import SwiftSonic
 
 struct ArtistRow: View {
     let artist: ArtistID3
+    var imageSize: CGFloat = 48
+    var verticalPadding: CGFloat = 0
 
     var body: some View {
         HStack(spacing: MinidiscSpacing.m) {
             CoverArtView(
                 id: artist.coverArt ?? artist.id,
-                size: 88,
+                size: Int(imageSize * 2),
                 placeholderSystemImage: "person.fill"
             )
-            .frame(width: 44, height: 44)
+            .frame(width: imageSize, height: imageSize)
             .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 2) {
@@ -28,7 +30,7 @@ struct ArtistRow: View {
 
             Spacer(minLength: 0)
         }
-        .padding(.vertical, MinidiscSpacing.xs)
+        .padding(.vertical, verticalPadding)
         .contentShape(Rectangle())
     }
 }

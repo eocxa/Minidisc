@@ -6,13 +6,15 @@ struct AlbumRow: View {
     let artist: String?
     let year: Int?
     let coverArtId: String?
+    var coverArtSize: CGFloat = 48
+    var verticalPadding: CGFloat = 0
 
     @Environment(ArtworkImageCache.self) private var artworkImageCache
     @State private var coverImage: PlatformImage?
 
     var body: some View {
         HStack(spacing: MinidiscSpacing.m) {
-            CoverArtCard(id: coverArtId ?? albumId, size: 56)
+            CoverArtCard(id: coverArtId ?? albumId, size: coverArtSize)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
@@ -34,7 +36,7 @@ struct AlbumRow: View {
 
             Spacer(minLength: 0)
         }
-        .padding(.vertical, MinidiscSpacing.xs)
+        .padding(.vertical, verticalPadding)
         .contentShape(Rectangle())
         .task(id: albumId) {
             coverImage = await artworkImageCache.load(coverArtId: coverArtId ?? albumId)

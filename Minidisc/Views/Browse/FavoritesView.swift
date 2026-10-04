@@ -63,6 +63,7 @@ struct FavoritesView: View {
                     artistsSection(artists)
                 }
                 .listStyle(.plain)
+                .environment(\.defaultMinListRowHeight, 58)
                 .refreshable {
                     if offline { await container?.offlineLibrary.refresh() }
                     else { await vm.load() }
@@ -109,22 +110,34 @@ struct FavoritesView: View {
                 .padding(.vertical, 4)
 
                 ForEach(Array(songs.enumerated()), id: \.element.favoriteScrollID) { index, song in
-                    SongRow(song: song, index: index + 1, showCoverArt: true, isFavorite: true, onAddToPlaylist: playlistAddition.present)
-                        .id(song.favoriteScrollID)
-                        .accessibilityIdentifier("favorites.song.\(song.id)")
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            Task {
-                                do {
-                                    try await container?.playerService.play(tracks: songs, startIndex: index)
-                                } catch {
-                                    Logger.player.error("[PLAYBACK] play failed: \(error, privacy: .public)")
-                                    if !UserFacingError.isCancellation(error) {
-                                        container?.toastService.showError(UserFacingError.from(error).displayMessage)
-                                    }
+                    SongRow(
+                        song: song,
+                        index: index + 1,
+                        showCoverArt: true,
+                        coverArtSize: 48,
+                        coverArtCornerRadius: MinidiscCornerRadius.xs,
+                        verticalPadding: 0,
+                        primaryContentSpacing: MinidiscSpacing.m,
+                        isFavorite: true,
+                        trailingAccessory: .menu,
+                        onAddToPlaylist: playlistAddition.present
+                    )
+                    .listRowInsets(EdgeInsets(top: 5, leading: MinidiscSpacing.xl, bottom: 5, trailing: MinidiscSpacing.s))
+                    .id(song.favoriteScrollID)
+                    .accessibilityIdentifier("favorites.song.\(song.id)")
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        Task {
+                            do {
+                                try await container?.playerService.play(tracks: songs, startIndex: index)
+                            } catch {
+                                Logger.player.error("[PLAYBACK] play failed: \(error, privacy: .public)")
+                                if !UserFacingError.isCancellation(error) {
+                                    container?.toastService.showError(UserFacingError.from(error).displayMessage)
                                 }
                             }
                         }
+                    }
                 }
             }
         }
@@ -144,6 +157,7 @@ struct FavoritesView: View {
                             coverArtId: album.coverArt
                         )
                     }
+                    .listRowInsets(EdgeInsets(top: 5, leading: MinidiscSpacing.xl, bottom: 5, trailing: MinidiscSpacing.s))
                     .id(album.favoriteScrollID)
                 }
             }
@@ -158,6 +172,7 @@ struct FavoritesView: View {
                     NavigationLink(value: HomeDestination.artist(artist)) {
                         ArtistRow(artist: artist)
                     }
+                    .listRowInsets(EdgeInsets(top: 5, leading: MinidiscSpacing.xl, bottom: 5, trailing: MinidiscSpacing.s))
                     .id(artist.favoriteScrollID)
                 }
             }

@@ -93,10 +93,12 @@ struct AlbumsListView: View {
                         coverArtId: album.coverArt
                     )
                 }
+                .listRowInsets(EdgeInsets(top: 5, leading: MinidiscSpacing.xl, bottom: 5, trailing: MinidiscSpacing.s))
                 .id(album.id)
                 .accessibilityIdentifier("browse.album.\(album.id)")
             }
             .listStyle(.plain)
+            .environment(\.defaultMinListRowHeight, 58)
             .refreshable { await refresh(vm) }
         }
     }

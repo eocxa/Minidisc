@@ -80,10 +80,12 @@ struct ArtistListView: View {
                 NavigationLink(value: HomeDestination.artist(artist)) {
                     ArtistRow(artist: artist)
                 }
+                .listRowInsets(EdgeInsets(top: 5, leading: MinidiscSpacing.xl, bottom: 5, trailing: MinidiscSpacing.s))
                 .id(artist.id)
                 .accessibilityIdentifier("browse.artist.\(artist.id)")
             }
             .listStyle(.plain)
+            .environment(\.defaultMinListRowHeight, 58)
             .refreshable { await refresh(vm) }
         }
     }
@@ -160,9 +162,11 @@ struct OfflineArtistAlbumsView: View {
                         coverArtId: album.coverArtId
                     )
                 }
+                .listRowInsets(EdgeInsets(top: 5, leading: MinidiscSpacing.xl, bottom: 5, trailing: MinidiscSpacing.s))
             }
         }
         .listStyle(.plain)
+        .environment(\.defaultMinListRowHeight, 58)
         .navigationTitle(artist.name)
         .navigationBarTitleDisplayModeInline()
         .minidiscContentWidth()
