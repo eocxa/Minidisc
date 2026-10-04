@@ -2,6 +2,7 @@ import Foundation
 import CryptoKit
 import OSLog
 import AVFoundation
+import UIKit
 
 private nonisolated final class FirstFrameMemoryCache: @unchecked Sendable {
     private let lock = NSLock()
@@ -71,7 +72,7 @@ actor MotionArtworkCache {
         return nil
     }
 
-    nonisolated func firstFrame(for remoteURL: URL) -> PlatformImage? {
+    func extractFirstFrame(for remoteURL: URL) async -> PlatformImage? {
         let key = Self.cacheKey(for: remoteURL)
         if let memory = Self.firstFrames.get(key) {
             return memory
@@ -83,7 +84,7 @@ actor MotionArtworkCache {
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = CGSize(width: 800, height: 800)
-        if let cgImage = try? generator.copyCGImage(at: .zero, actualTime: nil) {
+        if let (cgImage, _) = try? await generator.image(at: .zero) {
             let img = PlatformImage(cgImage: cgImage)
             Self.firstFrames.set(img, for: key)
             return img
@@ -91,9 +92,23 @@ actor MotionArtworkCache {
         return nil
     }
 
+    nonisolated func firstFrame(for remoteURL: URL) -> PlatformImage? {
+        let key = Self.cacheKey(for: remoteURL)
+        if let memory = Self.firstFrames.get(key) {
+            return memory
+        }
+
+        guard cachedURL(for: remoteURL) != nil else { return nil }
+
+        Task {
+            _ = await self.extractFirstFrame(for: remoteURL)
+        }
+        return nil
+    }
+
     func loadOrDownload(for remoteURL: URL) async throws -> URL {
         if let local = cachedURL(for: remoteURL) {
-            _ = firstFrame(for: remoteURL)
+            _ = await extractFirstFrame(for: remoteURL)
             return local
         }
         if let existing = inFlightDownloads[remoteURL] {
@@ -107,7 +122,7 @@ actor MotionArtworkCache {
             let dest = self.localFileURL(for: remoteURL)
             try? FileManager.default.removeItem(at: dest)
             try FileManager.default.moveItem(at: tempURL, to: dest)
-            _ = self.firstFrame(for: remoteURL)
+            _ = await self.extractFirstFrame(for: remoteURL)
             return dest
         }
         inFlightDownloads[remoteURL] = task

@@ -367,33 +367,21 @@ struct TTMLLineContentView: View {
     @ViewBuilder
     private var adlibsView: some View {
         if line.hasAdlib == true, let adlib = line.adlib, isLineActive && !isUserScrolling {
-            if let adlibWords = adlib.words, !adlibWords.isEmpty, hasWordSync {
-                LyricsFlowLayout(horizontalAlignment: alignment, verticalSpacing: 2) {
-                    ForEach(Array(groupWordsIntoWordUnits(adlibWords).enumerated()), id: \.offset) { _, group in
-                        TTMLWordUnitView(
-                            words: group,
-                            currentTime: currentTime,
-                            isLineActive: isLineActive,
-                            font: .system(size: 20, weight: .bold)
+            let rawText = (adlib.text?.isEmpty == false ? adlib.text : nil)
+                ?? adlib.words?.map(\.text).joined()
+                ?? ""
+            let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                Text(trimmed)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.85))
+                    .multilineTextAlignment(isV2 ? .trailing : .leading)
+                    .transition(
+                        .asymmetric(
+                            insertion: .opacity.combined(with: .offset(y: isAdlibBefore ? -6 : 6)),
+                            removal: .opacity.combined(with: .offset(y: isAdlibBefore ? -6 : 6))
                         )
-                    }
-                }
-                .opacity(0.85)
-                .transition(.opacity.combined(with: .offset(y: isAdlibBefore ? -4 : 4)))
-            } else if let adlibText = adlib.text, !adlibText.isEmpty {
-                if isLineActive {
-                    Text(adlibText)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.85))
-                        .multilineTextAlignment(isV2 ? .trailing : .leading)
-                        .transition(.opacity.combined(with: .offset(y: isAdlibBefore ? -4 : 4)))
-                } else {
-                    Text(adlibText)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.18))
-                        .multilineTextAlignment(isV2 ? .trailing : .leading)
-                        .transition(.opacity.combined(with: .offset(y: isAdlibBefore ? -4 : 4)))
-                }
+                    )
             }
         }
     }
@@ -665,15 +653,18 @@ struct TTMLLyricsView: View {
         }
         var height = max(1.0, mainRows) * 42.0
 
-        if line.hasAdlib == true, let adlib = line.adlib, let adlibText = adlib.text, !adlibText.isEmpty {
-            let adlibCharsPerLine = max(14.0, availableWidth / 10.5)
-            let adlibSublines = adlibText.components(separatedBy: "\n")
-            var adlibRows = 0.0
-            for sub in adlibSublines {
-                let count = max(1, sub.count)
-                adlibRows += max(1.0, ceil(Double(count) / adlibCharsPerLine))
+        if line.hasAdlib == true, let adlib = line.adlib {
+            let adlibText = (adlib.text?.isEmpty == false ? adlib.text : nil) ?? adlib.words?.map(\.text).joined() ?? ""
+            if !adlibText.isEmpty {
+                let adlibCharsPerLine = max(14.0, availableWidth / 10.5)
+                let adlibSublines = adlibText.components(separatedBy: "\n")
+                var adlibRows = 0.0
+                for sub in adlibSublines {
+                    let count = max(1, sub.count)
+                    adlibRows += max(1.0, ceil(Double(count) / adlibCharsPerLine))
+                }
+                height += max(1.0, adlibRows) * 26.0 + 4.0
             }
-            height += max(1.0, adlibRows) * 26.0 + 4.0
         }
         return height
     }

@@ -48,6 +48,7 @@ struct FullPlayerView: View {
     @State private var isMotionArtworkReady = false
     @State private var areLyricsControlsHidden = false
     @State private var lyricsInactivityTask: Task<Void, Never>?
+    @State private var lastActivityTime: Date = Date()
     @State private var previousTrack: DisplayableSong?
     @Namespace private var morphNS
 
@@ -218,17 +219,20 @@ struct FullPlayerView: View {
                         activeServerBaseURL: container?.serverState.activeServer?.baseURL
                     )
                     if (enrichment?.animatedTallUrl == nil && enrichment?.animatedSquareUrl == nil), let album = track.albumName, !album.isEmpty {
-                        let albumEnrichment = await NowLocalService.shared.fetchEnrichment(
+                        var albumEnrichment = await NowLocalService.shared.fetchEnrichment(
                             album: album,
                             artist: track.artist,
                             title: nil,
                             activeServerBaseURL: container?.serverState.activeServer?.baseURL
-                        ) ?? await NowLocalService.shared.fetchEnrichment(
-                            album: album,
-                            artist: nil,
-                            title: nil,
-                            activeServerBaseURL: container?.serverState.activeServer?.baseURL
                         )
+                        if albumEnrichment == nil {
+                            albumEnrichment = await NowLocalService.shared.fetchEnrichment(
+                                album: album,
+                                artist: nil,
+                                title: nil,
+                                activeServerBaseURL: container?.serverState.activeServer?.baseURL
+                            )
+                        }
                         if let albumEnrichment {
                             enrichment = NowLocalEnrichment(
                                 found: true,
