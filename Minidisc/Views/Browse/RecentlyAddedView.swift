@@ -101,7 +101,8 @@ struct RecentlyAddedView: View {
                     onTap: { index in play(from: index) },
                     onDownload: { id in Task { await viewModel?.download(songIds: [id]) } },
                     onRemoveDownload: { id in Task { await viewModel?.removeDownload(songId: id) } },
-                    rowBackground: bodyColor
+                    rowBackground: bodyColor,
+                    trailingAccessory: .menu
                 )
             }
         }

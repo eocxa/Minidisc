@@ -1411,12 +1411,13 @@ struct AlbumSongRows: View {
             let removeAction: (() -> Void)? = liveDownloaded ? onRemoveDownload.map { action in { action(song.id) } } : nil
             VStack(spacing: 0) {
                 SongRow(song: liveSong, index: index + 1, showArtist: showArtists, isFavorite: favoriteSongIds.contains("song:\(song.id)"), titleColor: titleColor, secondaryColor: secondaryColor, trailingAccessory: .menu, onDownload: downloadAction, onRemoveDownload: removeAction, isDownloading: isDownloading, onAddToPlaylist: onAddToPlaylist, onTap: { onTap(index) })
-                    .padding(.vertical, MinidiscSpacing.xs)
-                    .padding(.horizontal, MinidiscSpacing.l)
+                    .padding(.vertical, 5)
+                    .padding(.leading, MinidiscSpacing.xl)
+                    .padding(.trailing, MinidiscSpacing.s)
                 if index < songs.count - 1 {
                     Divider()
                         .overlay(titleColor.opacity(0.22))
-                        .padding(.leading, MinidiscSpacing.l + 36)
+                        .padding(.leading, MinidiscSpacing.xl + 36)
                 }
             }
         }

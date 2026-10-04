@@ -131,6 +131,17 @@ private struct SearchMatchRow: View {
             SongRow(song: song, index: 1, showCoverArt: true, isFavorite: isFavorite,
                     trailingAccessory: .menu, onAddToPlaylist: onAddToPlaylist, onTap: {
                 Task {
+                    if let serverId = container?.serverState.activeServer?.id.uuidString {
+                        await container?.searchHistoryService.record(
+                            itemId: song.id,
+                            itemType: "song",
+                            displayName: song.title,
+                            coverArtId: song.coverArtId ?? song.id,
+                            serverId: serverId,
+                            artistName: song.artist,
+                            albumName: song.albumName
+                        )
+                    }
                     await container?.toastService.perform {
                         try await container?.playerService.play(tracks: songs, startIndex: songs.firstIndex { $0.id == song.id } ?? 0)
                     }

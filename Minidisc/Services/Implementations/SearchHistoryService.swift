@@ -9,7 +9,8 @@ actor SearchHistoryService {
     }
 
     func record(itemId: String, itemType: String, displayName: String,
-                coverArtId: String?, serverId: String) async {
+                coverArtId: String?, serverId: String,
+                artistName: String? = nil, albumName: String? = nil) async {
         let ctx = ModelContext(container)
         let compositeId = "\(serverId)_\(itemId)"
 
@@ -18,11 +19,17 @@ actor SearchHistoryService {
         )
         if let existing = try? ctx.fetch(descriptor).first {
             existing.visitedAt = Date()
+            existing.itemType = itemType
+            existing.displayName = displayName
+            if let artistName { existing.artistName = artistName }
+            if let albumName { existing.albumName = albumName }
+            if let coverArtId { existing.coverArtId = coverArtId }
         } else {
             ctx.insert(SearchHistoryEntry(
                 itemId: itemId, itemType: itemType,
                 displayName: displayName, coverArtId: coverArtId,
-                serverId: serverId
+                serverId: serverId,
+                artistName: artistName, albumName: albumName
             ))
             let all = FetchDescriptor<SearchHistoryEntry>(
                 predicate: #Predicate { $0.serverId == serverId },

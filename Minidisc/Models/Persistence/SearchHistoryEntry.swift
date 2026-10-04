@@ -10,9 +10,12 @@ final class SearchHistoryEntry {
     var coverArtId: String?
     var serverId: String        // UUID as String for predicate compat
     var visitedAt: Date
+    var artistName: String? = nil
+    var albumName: String? = nil
 
     init(itemId: String, itemType: String, displayName: String,
-         coverArtId: String?, serverId: String) {
+         coverArtId: String?, serverId: String,
+         artistName: String? = nil, albumName: String? = nil) {
         self.entryId     = "\(serverId)_\(itemId)"
         self.itemId      = itemId
         self.itemType    = itemType
@@ -20,5 +23,7 @@ final class SearchHistoryEntry {
         self.coverArtId  = coverArtId
         self.serverId    = serverId
         self.visitedAt   = Date()
+        self.artistName  = artistName
+        self.albumName   = albumName
     }
 }

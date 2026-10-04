@@ -96,12 +96,23 @@ struct ArtistDetailView: View {
                             VStack(alignment: .leading, spacing: MinidiscSpacing.xl) {
                                 if !isOnline && albums.isEmpty {
                                     ForEach(Array(localTracks.enumerated()), id: \.element.id) { index, song in
-                                        SongRow(song: song, index: index + 1, showCoverArt: true)
-                                            .onTapGesture {
-                                                Task { await container?.toastService.perform {
-                                                    try await container?.playerService.play(tracks: localTracks, startIndex: index)
-                                                } }
-                                            }
+                                        SongRow(
+                                            song: song,
+                                            index: index + 1,
+                                            showCoverArt: true,
+                                            coverArtSize: 48,
+                                            coverArtCornerRadius: MinidiscCornerRadius.xs,
+                                            primaryContentSpacing: MinidiscSpacing.m,
+                                            trailingAccessory: .menu
+                                        )
+                                        .padding(.vertical, 5)
+                                        .padding(.leading, MinidiscSpacing.xl)
+                                        .padding(.trailing, MinidiscSpacing.s)
+                                        .onTapGesture {
+                                            Task { await container?.toastService.perform {
+                                                try await container?.playerService.play(tracks: localTracks, startIndex: index)
+                                            } }
+                                        }
                                     }
                                 }
                                 // Hidden offline: downloads carry no release year, so "Latest" would be
@@ -492,15 +503,21 @@ struct ArtistDetailView: View {
                             index: index + 1,
                             showCoverArt: true,
                             showArtist: false,
+                            coverArtSize: 48,
+                            coverArtCornerRadius: MinidiscCornerRadius.xs,
+                            primaryContentSpacing: MinidiscSpacing.m,
                             isFavorite: true,
                             titleColor: headerTextColor,
-                            secondaryColor: headerSecondaryColor
+                            secondaryColor: headerSecondaryColor,
+                            trailingAccessory: .menu
                         )
+                        .padding(.vertical, 5)
+                        .padding(.leading, MinidiscSpacing.xl)
+                        .padding(.trailing, MinidiscSpacing.s)
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, MinidiscSpacing.l)
         }
     }
 
@@ -561,7 +578,7 @@ struct ArtistDetailView: View {
 // MARK: - Artist content shelves
 
 private enum ArtistDetailMetrics {
-    static let topSongArtwork: CGFloat = 44
+    static let topSongArtwork: CGFloat = 48
 }
 
 private struct ArtistAlbumShelf: View {
@@ -683,12 +700,12 @@ private struct ArtistTopSongsList: View {
                         onGoToAlbum: { presentAlbum(for: song) },
                         onTap: { play(song) }
                     )
-                    .padding(.vertical, MinidiscSpacing.xs)
+                    .padding(.vertical, 5)
 
                     if song.id != displayedSongs.last?.id {
                         Divider()
                             .overlay(secondaryColor.opacity(0.26))
-                            .padding(.leading, ArtistDetailMetrics.topSongArtwork + MinidiscSpacing.s)
+                            .padding(.leading, ArtistDetailMetrics.topSongArtwork + MinidiscSpacing.m)
                     }
                 }
             }

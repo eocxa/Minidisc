@@ -53,14 +53,14 @@ private struct QueueRow: View {
                     .accessibilityIdentifier("queue.reorder.\(song.id)")
             }
         }
-        .padding(.vertical, 1)
+        .padding(.vertical, 0)
         .modifier(SongQuickActions(song: song, onAddToPlaylist: playlistAddition.present, onRemove: onRemove))
     }
 
     private var titleAndArtwork: some View {
         HStack(spacing: MinidiscSpacing.m) {
-            CoverArtView(id: song.coverArtId ?? song.id, size: 88, loadingEnabled: loadArtwork)
-                .frame(width: 44, height: 44)
+            CoverArtView(id: song.coverArtId ?? song.id, size: 96, loadingEnabled: loadArtwork)
+                .frame(width: 48, height: 48)
                 .minidiscCoverStyle(cornerRadius: MinidiscCornerRadius.xs)
 
             VStack(alignment: .leading, spacing: MinidiscSpacing.xs) {
@@ -223,7 +223,7 @@ private struct QueueEntryRow: View {
                  loadArtwork: loadArtwork, showsReorderHint: showsReorderHint)
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: 2, leading: MinidiscSpacing.l, bottom: 2, trailing: MinidiscSpacing.l))
+            .listRowInsets(EdgeInsets(top: 5, leading: MinidiscSpacing.xl, bottom: 5, trailing: MinidiscSpacing.s))
             .contentShape(Rectangle())
             .accessibilityIdentifier("queue.track.\(entry.song.id).\(entry.id.occurrence)")
             .onTapGesture {
@@ -267,7 +267,7 @@ private struct ReorderableQueueList: View {
             // Apply row traits outside the reorderable wrapper so List receives them.
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: 2, leading: MinidiscSpacing.l, bottom: 2, trailing: MinidiscSpacing.l))
+            .listRowInsets(EdgeInsets(top: 5, leading: MinidiscSpacing.xl, bottom: 5, trailing: MinidiscSpacing.s))
         }
         .reorderContainer(for: QueueRowSnapshot.self) { difference in
             guard difference.sources.count == 1,
@@ -287,7 +287,7 @@ private struct ReorderableQueueList: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .environment(\.defaultMinListRowHeight, 46)
+        .environment(\.defaultMinListRowHeight, 58)
     }
 }
 
@@ -317,7 +317,7 @@ private struct LegacyQueueList: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .environment(\.defaultMinListRowHeight, 46)
+        .environment(\.defaultMinListRowHeight, 58)
         .environment(\.editMode, .constant(.active))
     }
 }

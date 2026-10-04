@@ -98,15 +98,25 @@ struct SongsListView: View {
                 }
                 playShuffleHeader(songs)
                 ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                    SongRow(song: song, index: index + 1, showCoverArt: true, verticalPadding: 1, isFavorite: isFavorite(song))
-                        .listRowInsets(EdgeInsets(top: 2, leading: MinidiscSpacing.l, bottom: 2, trailing: MinidiscSpacing.l))
-                        .contentShape(Rectangle())
-                        .onTapGesture { play(songs, at: index) }
-                        .id(song.id)
+                    SongRow(
+                        song: song,
+                        index: index + 1,
+                        showCoverArt: true,
+                        coverArtSize: 48,
+                        coverArtCornerRadius: MinidiscCornerRadius.xs,
+                        verticalPadding: 0,
+                        primaryContentSpacing: MinidiscSpacing.m,
+                        isFavorite: isFavorite(song),
+                        trailingAccessory: .menu
+                    )
+                    .listRowInsets(EdgeInsets(top: 5, leading: MinidiscSpacing.xl, bottom: 5, trailing: MinidiscSpacing.s))
+                    .contentShape(Rectangle())
+                    .onTapGesture { play(songs, at: index) }
+                    .id(song.id)
                 }
             }
             .listStyle(.plain)
-            .environment(\.defaultMinListRowHeight, 46)
+            .environment(\.defaultMinListRowHeight, 58)
             .refreshable { await refresh(vm) }
             .safeAreaInset(edge: .trailing, spacing: 0) {
                 // The A–Z jump bar only makes sense when sorted by title.

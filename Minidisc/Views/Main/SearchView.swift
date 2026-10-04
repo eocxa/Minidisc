@@ -69,7 +69,8 @@ struct SearchView: View {
                 await container?.searchHistoryService.record(
                     itemId: album.id, itemType: "album",
                     displayName: album.name, coverArtId: album.coverArt,
-                    serverId: serverId
+                    serverId: serverId,
+                    artistName: album.artist
                 )
             } content: {
                 AlbumDetailView(album: album)
@@ -87,12 +88,20 @@ struct SearchView: View {
                     PlaylistDetailView(playlist: playlist)
                 }
             case .album(let album):
-                AlbumDetailView(
-                    album: album,
-                    zoomSourceId: album.id,
-                    zoomNamespace: albumZoomNamespace,
-                    coverArtId: album.coverArt
-                )
+                HistoryRecordingView {
+                    await container?.searchHistoryService.record(
+                        itemId: album.id, itemType: "album", displayName: album.name,
+                        coverArtId: album.coverArt, serverId: serverId,
+                        artistName: album.artist
+                    )
+                } content: {
+                    AlbumDetailView(
+                        album: album,
+                        zoomSourceId: album.id,
+                        zoomNamespace: albumZoomNamespace,
+                        coverArtId: album.coverArt
+                    )
+                }
             case .albumById(let id, let name, _, let coverArtId):
                 AlbumDetailView(
                     albumId: id,
@@ -347,6 +356,17 @@ struct SearchView: View {
                         .contentShape(Rectangle())
                         .onTapGesture {
                             Task {
+                                if let serverId = container?.serverState.activeServer?.id.uuidString {
+                                    await container?.searchHistoryService.record(
+                                        itemId: song.id,
+                                        itemType: "song",
+                                        displayName: song.title,
+                                        coverArtId: song.coverArtId ?? song.id,
+                                        serverId: serverId,
+                                        artistName: song.artist,
+                                        albumName: song.albumName
+                                    )
+                                }
                                 do {
                                     try await container?.playerService.play(tracks: songs, startIndex: index)
                                 } catch {
@@ -370,7 +390,10 @@ struct SearchView: View {
         @Binding var path: NavigationPath
 
         @Environment(\.appContainer) private var container
+        @Environment(PlaylistAddition.self) private var playlistAddition
         @Query private var historyEntries: [SearchHistoryEntry]
+        @Query private var downloadedAlbums: [DownloadedAlbum]
+        @Query private var downloadedTracks: [DownloadedTrack]
         @State private var showClearConfirm = false
 
         init(serverId: String, path: Binding<NavigationPath>) {
@@ -381,6 +404,14 @@ struct SearchView: View {
             )
             descriptor.fetchLimit = 50
             _historyEntries = Query(descriptor)
+        }
+
+        private var downloadedSongIds: Set<String> {
+            Set(downloadedTracks.map(\.songId))
+        }
+
+        private var downloadedAlbumIds: Set<String> {
+            Set(downloadedAlbums.map(\.albumId))
         }
 
         private var serverHistory: [SearchHistoryEntry] {
@@ -410,26 +441,22 @@ struct SearchView: View {
                 List {
                     Section {
                         LazyVStack(spacing: 0) {
-                            ForEach(rowsData) { rowData in
-                                Button {
-                                    let target = SearchHistoryNavTarget(
-                                        itemId: rowData.itemId,
-                                        itemType: rowData.itemType,
-                                        displayName: rowData.displayName,
-                                        coverArtId: rowData.coverArtId
-                                    )
-                                    Task {
-                                        await container?.searchHistoryService.record(
-                                            itemId: rowData.itemId, itemType: rowData.itemType,
-                                            displayName: rowData.displayName, coverArtId: rowData.coverArtId,
-                                            serverId: serverId
-                                        )
-                                    }
-                                    path.append(target)
-                                } label: {
-                                    SearchHistoryEntryRow(data: rowData)
+                            ForEach(Array(rowsData.enumerated()), id: \.element.id) { index, rowData in
+                                SearchHistoryEntryRow(
+                                    data: rowData,
+                                    isDownloaded: rowData.itemType == "song"
+                                        ? downloadedSongIds.contains(rowData.itemId)
+                                        : downloadedAlbumIds.contains(rowData.itemId),
+                                    onSelect: { select(rowData) },
+                                    onPlaySong: { playSong(rowData) },
+                                    onAddToPlaylist: playlistAddition.present,
+                                    onDownloadAlbum: { downloadAlbum(rowData) }
+                                )
+                                if index < rowsData.count - 1 {
+                                    Divider()
+                                        .overlay(Color.primary.opacity(0.12))
+                                        .padding(.leading, 76)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                         .listRowInsets(EdgeInsets())
@@ -437,17 +464,18 @@ struct SearchView: View {
                         .listRowBackground(Color.clear)
                     } header: {
                         HStack {
-                            Text("Recent")
-                                .font(.minidiscSectionTitle)
+                            Text("Recently Searched")
+                                .font(.title3.weight(.bold))
                                 .foregroundStyle(.primary)
                             Spacer()
                             Button("Clear") {
                                 showClearConfirm = true
                             }
-                            .font(.minidiscBody)
-                            .foregroundStyle(Color.minidiscAccent)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.red)
                         }
                         .textCase(nil)
+                        .padding(.vertical, MinidiscSpacing.xs)
                     }
                 }
                 .listStyle(.plain)
@@ -458,6 +486,75 @@ struct SearchView: View {
                     Button("Cancel", role: .cancel) {}
                 } message: {
                     Text("This will remove all your recent searches. This action cannot be undone.")
+                }
+            }
+        }
+
+        private func select(_ rowData: SearchHistoryRowData) {
+            let target = SearchHistoryNavTarget(
+                itemId: rowData.itemId,
+                itemType: rowData.itemType,
+                displayName: rowData.displayName,
+                coverArtId: rowData.coverArtId
+            )
+            Task {
+                await container?.searchHistoryService.record(
+                    itemId: rowData.itemId,
+                    itemType: rowData.itemType,
+                    displayName: rowData.displayName,
+                    coverArtId: rowData.coverArtId,
+                    serverId: serverId,
+                    artistName: rowData.artistName,
+                    albumName: rowData.albumName
+                )
+            }
+            path.append(target)
+        }
+
+        private func playSong(_ rowData: SearchHistoryRowData) {
+            let song = DisplayableSong(
+                id: rowData.itemId,
+                title: rowData.displayName,
+                artist: rowData.artistName,
+                albumId: nil,
+                albumName: rowData.albumName,
+                artistId: nil,
+                genre: nil,
+                duration: 0,
+                trackNumber: nil,
+                isDownloaded: downloadedSongIds.contains(rowData.itemId),
+                coverArtId: rowData.coverArtId
+            )
+            Task {
+                await container?.searchHistoryService.record(
+                    itemId: rowData.itemId,
+                    itemType: "song",
+                    displayName: rowData.displayName,
+                    coverArtId: rowData.coverArtId,
+                    serverId: serverId,
+                    artistName: rowData.artistName,
+                    albumName: rowData.albumName
+                )
+                await container?.toastService.perform {
+                    try await container?.playerService.play(tracks: [song], startIndex: 0)
+                }
+            }
+        }
+
+        private func downloadAlbum(_ rowData: SearchHistoryRowData) {
+            guard let serverUUID = UUID(uuidString: serverId) else { return }
+            let album = AlbumID3(
+                id: rowData.itemId,
+                name: rowData.displayName,
+                songCount: 0,
+                duration: 0,
+                artist: rowData.artistName,
+                artistId: nil,
+                coverArt: rowData.coverArtId
+            )
+            Task {
+                await container?.toastService.perform {
+                    try await container?.downloadService.download(album: album, serverId: serverUUID)
                 }
             }
         }
