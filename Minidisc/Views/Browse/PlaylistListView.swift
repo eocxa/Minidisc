@@ -161,7 +161,7 @@ private struct OnlinePlaylistRow: View {
                 .minidiscMatchedTransitionSource(id: playlist.id, in: namespace)
             VStack(alignment: .leading, spacing: 2) {
                 Text(playlist.name)
-                    .font(.minidiscCellTitle)
+                    .font(.minidiscBody)
                     .lineLimit(1)
                 Text("\(playlist.songCount) tracks")
                     .font(.minidiscCaption)
@@ -217,7 +217,7 @@ private struct RecentlyAddedPlaylistRow: View {
                 .clipShape(RoundedRectangle(cornerRadius: MinidiscCornerRadius.standard, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text("Recently Added")
-                    .font(.minidiscCellTitle)
+                    .font(.minidiscBody)
                     .lineLimit(1)
                 // No track count: knowing it would mean fetching every album's tracks just to draw a row.
                 Text("The newest tracks in your library")
@@ -244,7 +244,7 @@ private struct BestOfPlaylistRow: View {
                 .clipShape(RoundedRectangle(cornerRadius: MinidiscCornerRadius.standard, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text("The best of \(bestOf.artistName)")
-                    .font(.minidiscCellTitle)
+                    .font(.minidiscBody)
                     .lineLimit(1)
                 Text("\(bestOf.songs.count) tracks")
                     .font(.minidiscCaption)

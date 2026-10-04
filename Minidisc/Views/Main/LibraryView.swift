@@ -460,7 +460,7 @@ private struct HomeLibraryRowLabel: View {
                     .foregroundStyle(.white)
             }
             Text(title, tableName: tableName)
-                .font(.minidiscCellTitle)
+                .font(.minidiscBody)
                 .foregroundStyle(.primary)
             Spacer(minLength: 0)
             Image(systemName: "chevron.right")

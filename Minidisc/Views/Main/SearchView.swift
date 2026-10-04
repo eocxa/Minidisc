@@ -465,13 +465,13 @@ struct SearchView: View {
                     } header: {
                         HStack {
                             Text("Recently Searched")
-                                .font(.title3.weight(.bold))
+                                .font(.title3)
                                 .foregroundStyle(.primary)
                             Spacer()
                             Button("Clear") {
                                 showClearConfirm = true
                             }
-                            .font(.subheadline.weight(.semibold))
+                            .font(.subheadline)
                             .foregroundStyle(.red)
                         }
                         .textCase(nil)

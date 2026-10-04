@@ -65,7 +65,7 @@ private struct QueueRow: View {
 
             VStack(alignment: .leading, spacing: MinidiscSpacing.xs) {
                 Text(song.title)
-                    .font(.minidiscCellTitle)
+                    .font(.minidiscBody)
                     .foregroundStyle(isCurrent ? playingAccent : contentColor)
                     .lineLimit(1)
                 if let artist = song.artist {

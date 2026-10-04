@@ -108,7 +108,7 @@ struct SearchHistoryEntryRow: View, Equatable {
     private var textContent: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(data.displayName)
-                .font(.minidiscBody.weight(.medium))
+                .font(.minidiscBody)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
 
@@ -122,10 +122,6 @@ struct SearchHistoryEntryRow: View, Equatable {
                     .font(.minidiscCaption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Text("From Your Library")
-                    .font(.minidiscCaption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
             } else if isSong {
                 let artistText = data.artistName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 Text(artistText.isEmpty ? "Song" : "Song • \(artistText)")
@@ -136,10 +132,6 @@ struct SearchHistoryEntryRow: View, Equatable {
                 let classification = isSingle ? "Single" : "Album"
                 let artistText = data.artistName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 Text(artistText.isEmpty ? classification : "\(classification) • \(artistText)")
-                    .font(.minidiscCaption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Text("From Your Library")
                     .font(.minidiscCaption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -161,31 +153,6 @@ struct SearchHistoryEntryRow: View, Equatable {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Options for \(data.displayName)")
-        } else if isAlbum {
-            HStack(spacing: MinidiscSpacing.s) {
-                if isDownloaded {
-                    Image(systemName: "arrow.down.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(Color.minidiscAccent)
-                        .accessibilityLabel("Downloaded")
-                } else if let onDownloadAlbum {
-                    Button(action: onDownloadAlbum) {
-                        Image(systemName: "arrow.down.circle")
-                            .font(.system(size: 18))
-                            .foregroundStyle(Color.minidiscAccent)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Download album")
-                } else {
-                    Image(systemName: "arrow.down.circle")
-                        .font(.system(size: 18))
-                        .foregroundStyle(Color.minidiscAccent)
-                }
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-            }
         } else {
             Image(systemName: "chevron.right")
                 .font(.system(size: 14, weight: .semibold))

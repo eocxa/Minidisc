@@ -18,7 +18,7 @@ struct ArtistRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(artist.name)
-                    .font(.minidiscCellTitle)
+                    .font(.minidiscBody)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 if let count = artist.albumCount {

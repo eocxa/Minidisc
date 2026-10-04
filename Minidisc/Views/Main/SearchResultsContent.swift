@@ -170,7 +170,7 @@ struct SearchPlaylistRow: View {
                                    coverArtId: playlist.coverArt ?? playlist.id,
                                    title: playlist.name, size: 56)
             VStack(alignment: .leading, spacing: MinidiscSpacing.xs) {
-                Text(playlist.name).font(.minidiscCellTitle).lineLimit(2)
+                Text(playlist.name).font(.minidiscBody).lineLimit(2)
                 Text("\(playlist.songCount) tracks")
                     .font(.minidiscCellSubtitle).foregroundStyle(.secondary)
             }
