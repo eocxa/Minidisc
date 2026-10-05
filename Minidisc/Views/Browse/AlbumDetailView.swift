@@ -307,39 +307,54 @@ struct AlbumDetailView: View {
         let hasAnimated = hasAnimatedCover
         let songs = displaySongs()
 
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                headerSection(hasAnimatedCover: hasAnimated)
+        ScrollViewReader { proxy in
+            ScrollView {
+                Color.clear
+                    .frame(height: 0)
+                    .id("albumDetailTop")
 
-                AlbumPlaybackActions(
-                    albumId: albumId,
-                    songs: songs,
-                    mode: mode,
-                    viewModel: viewModel,
-                    downloadedAlbumTracks: downloadedAlbumTracks,
-                    contentColor: palette.contentColor,
-                    controlFillColor: palette.controlFillColor,
-                    playLabelColor: palette.playLabelColor,
-                    showDeleteAlert: $showDeleteAlert
-                )
-                .padding(.top, MinidiscSpacing.l)
-                .padding(.bottom, MinidiscSpacing.xl)
+                LazyVStack(spacing: 0) {
+                    headerSection(hasAnimatedCover: hasAnimated)
 
-                if isLoadingSkeleton {
-                    AlbumTrackSkeletonRows()
-                } else if let vm = viewModel {
-                    trackListContent(songs: songs, vm: vm)
+                    AlbumPlaybackActions(
+                        albumId: albumId,
+                        songs: songs,
+                        mode: mode,
+                        viewModel: viewModel,
+                        downloadedAlbumTracks: downloadedAlbumTracks,
+                        contentColor: palette.contentColor,
+                        controlFillColor: palette.controlFillColor,
+                        playLabelColor: palette.playLabelColor,
+                        showDeleteAlert: $showDeleteAlert
+                    )
+                    .padding(.top, MinidiscSpacing.l)
+                    .padding(.bottom, MinidiscSpacing.xl)
+
+                    if isLoadingSkeleton {
+                        AlbumTrackSkeletonRows()
+                    } else if let vm = viewModel {
+                        trackListContent(songs: songs, vm: vm)
+                    }
                 }
             }
+            .defaultScrollAnchor(.top)
+            .ignoresSafeArea(.container, edges: topScrollEdges)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .refreshable { await viewModel?.load() }
+            .miniPlayerBottomMargin()
+            .animation(.easeInOut(duration: 0.35), value: isMotionVideoReady)
+            .minidiscHideTopScrollEdgeEffect()
+            .minidiscSongSwipeContainer()
+            .onAppear {
+                proxy.scrollTo("albumDetailTop", anchor: .top)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    proxy.scrollTo("albumDetailTop", anchor: .top)
+                }
+            }
+            .onChange(of: hasTallAnimatedCover) { _, _ in
+                proxy.scrollTo("albumDetailTop", anchor: .top)
+            }
         }
-        .contentMargins(.top, hasTallAnimatedCover ? 0 : 0, for: .scrollContent)
-        .ignoresSafeArea(.all, edges: topScrollEdges)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .refreshable { await viewModel?.load() }
-        .miniPlayerBottomMargin()
-        .animation(.easeInOut(duration: 0.35), value: isMotionVideoReady)
-        .minidiscHideTopScrollEdgeEffect()
-        .minidiscSongSwipeContainer()
     }
 
     @ToolbarContentBuilder
@@ -541,7 +556,6 @@ struct AlbumDetailView: View {
 
     var body: some View {
         scrollContent
-            .ignoresSafeArea(.container, edges: topScrollEdges)
             .alert("Remove downloaded album?", isPresented: $showDeleteAlert) {
                 Button("Remove", role: .destructive) { Task { await viewModel?.deleteDownload() } }
                 Button("Cancel", role: .cancel) { }
