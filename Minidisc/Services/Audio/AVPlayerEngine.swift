@@ -101,7 +101,7 @@ nonisolated final class AVPlayerEngine: AudioEngine, @unchecked Sendable {
     private var lastWatchdogTime: Double = -1
     private var lastWatchdogAdvance = Date()
     private static let watchdogInterval = 500
-    private static let endOfFileTolerance: Double = 3.5
+    private static let endOfFileTolerance: Double = 15.0
     private static let frozenClockGrace: Double = 1.0
 
     private var timeControlObservers: [NSKeyValueObservation] = []
@@ -764,10 +764,13 @@ nonisolated final class AVPlayerEngine: AudioEngine, @unchecked Sendable {
         // `position > 0` keeps a track that never started (still opening the stream, failed to load)
         // out of this path — that is an error for PlayerService to handle, not a finished track.
         let remaining = trackDuration - position
+        let isNearEnd = remaining >= -Self.endOfFileTolerance && (
+            remaining <= Self.endOfFileTolerance ||
+            (trackDuration > 30 && position >= trackDuration * 0.95)
+        )
         guard position > 0,
               Date().timeIntervalSince(lastWatchdogAdvance) >= Self.frozenClockGrace,
-              remaining >= -Self.endOfFileTolerance,
-              remaining <= Self.endOfFileTolerance else { return }
+              isNearEnd else { return }
 
         let reading = String(format: "%.2fs of %.2fs", position, trackDuration)
         Logger.player.warning(

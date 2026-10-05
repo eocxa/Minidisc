@@ -593,7 +593,7 @@ struct FullPlayerView: View {
 
             let effectiveAnimatedURL = resolvedAnimatedCoverURL
             let canvasWidth = isCanvas ? geo.size.width : artworkSide
-            let canvasHeight = isCanvas ? min(geo.size.height, max(artworkSide, geo.size.width * 4.0 / 3.0)) : artworkSide
+            let canvasHeight = isCanvas ? max(geo.size.height, geo.size.width * 4.0 / 3.0) : artworkSide
 
             Group {
                 if let animatedURL = effectiveAnimatedURL, isSource, !showLyrics {
@@ -622,7 +622,7 @@ struct FullPlayerView: View {
                             LinearGradient(
                                 stops: [
                                     .init(color: .black, location: 0),
-                                    .init(color: .black, location: 0.7),
+                                    .init(color: .black, location: 0.65),
                                     .init(color: .clear, location: 1.0)
                                 ],
                                 startPoint: .top,
@@ -654,7 +654,6 @@ struct FullPlayerView: View {
                 y: isSource ? 10 : 3
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: isCanvas ? .top : .center)
-            .clipped()
             .trackSwipeGesture(
                 interaction: trackSwipe,
                 playerState: playerState,
