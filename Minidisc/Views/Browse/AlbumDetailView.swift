@@ -125,24 +125,38 @@ struct AlbumDetailView: View {
         return cached
     }
 
+    private var isDataSaverEnabled: Bool {
+        UserDefaults.standard.bool(forKey: "minidisc_data_saver_enabled")
+    }
+
     private var resolvedAnimatedSquareURL: URL? {
         guard !UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_disabled") else { return nil }
-        return NowLocalService.shared.resolveArtworkURL(
+        guard let url = NowLocalService.shared.resolveArtworkURL(
             path: effectiveEnrichment?.animatedSquareUrl,
             activeServerBaseURL: container?.serverState.activeServer?.baseURL
-        )
+        ) else { return nil }
+        if isDataSaverEnabled && MotionArtworkCache.shared.cachedURL(for: url) == nil {
+            return nil
+        }
+        return url
     }
 
     private var resolvedAnimatedTallURL: URL? {
         guard !UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_disabled") else { return nil }
-        return NowLocalService.shared.resolveArtworkURL(
+        guard let url = NowLocalService.shared.resolveArtworkURL(
             path: effectiveEnrichment?.animatedTallUrl,
             activeServerBaseURL: container?.serverState.activeServer?.baseURL
-        )
+        ) else { return nil }
+        if isDataSaverEnabled && MotionArtworkCache.shared.cachedURL(for: url) == nil {
+            return nil
+        }
+        return url
     }
 
     private var resolvedAnimatedCoverURL: URL? {
-        resolvedAnimatedTallURL ?? resolvedAnimatedSquareURL
+        hasTallAnimatedCover
+            ? (resolvedAnimatedTallURL ?? resolvedAnimatedSquareURL)
+            : (resolvedAnimatedSquareURL ?? resolvedAnimatedTallURL)
     }
 
     private var hasTallAnimatedCover: Bool {
@@ -859,6 +873,7 @@ struct AlbumArtworkSection: View {
                         .shadow(color: .clear, radius: 0, y: 0)
                     }
                     .frame(height: 440)
+                    .clipped()
                     .id(animatedURL)
                 } else {
                     MotionArtworkView(

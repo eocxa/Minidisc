@@ -17,16 +17,19 @@ struct SongQuickActions: ViewModifier {
                         HapticFeedback.light.trigger()
                         Task { await container?.playerService.playNext(song) }
                     } label: {
-                        Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
+                        Image(systemName: "text.line.first.and.arrowtriangle.forward")
                     }
                     .tint(.orange)
+                    .accessibilityLabel("Play Next")
+
                     Button {
                         HapticFeedback.light.trigger()
                         Task { await container?.playerService.addToQueue(song) }
                     } label: {
-                        Label("Add to Queue", systemImage: "text.append")
+                        Image(systemName: "text.append")
                     }
                     .tint(.purple)
+                    .accessibilityLabel("Add to Queue")
                 }
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {

@@ -64,7 +64,7 @@ struct SearchHistoryEntryRow: View, Equatable {
         )
     }
 
-    var body: some View {
+    private var rowContent: some View {
         HStack(spacing: MinidiscSpacing.m) {
             Button {
                 if isSong {
@@ -90,6 +90,15 @@ struct SearchHistoryEntryRow: View, Equatable {
             if isSong {
                 songContextMenu
             }
+        }
+    }
+
+    var body: some View {
+        if isSong {
+            rowContent
+                .modifier(SongQuickActions(song: asDisplayableSong, onAddToPlaylist: onAddToPlaylist))
+        } else {
+            rowContent
         }
     }
 

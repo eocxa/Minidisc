@@ -32,7 +32,13 @@ final class StreamSettings {
         }
     }
 
-    var currentQuality: StreamQuality { isCellular ? cellularQuality : wifiQuality }
+    var currentQuality: StreamQuality {
+        access(keyPath: \.currentQuality)
+        if defaults.bool(forKey: "minidisc_data_saver_enabled") {
+            return .mp3_192
+        }
+        return isCellular ? cellularQuality : wifiQuality
+    }
 
     static let defaultWifiQuality: StreamQuality = .original
     static let defaultCellularQuality: StreamQuality = .mp3_192

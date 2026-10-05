@@ -143,7 +143,7 @@ private struct SearchMatchRow: View {
                         )
                     }
                     await container?.toastService.perform {
-                        try await container?.playerService.play(tracks: songs, startIndex: songs.firstIndex { $0.id == song.id } ?? 0)
+                        try await container?.playerService.play(tracks: [song], startIndex: 0)
                     }
                 }
             })

@@ -101,7 +101,7 @@ nonisolated final class AVPlayerEngine: AudioEngine, @unchecked Sendable {
     private var lastWatchdogTime: Double = -1
     private var lastWatchdogAdvance = Date()
     private static let watchdogInterval = 500
-    private static let endOfFileTolerance: Double = 1.5
+    private static let endOfFileTolerance: Double = 3.5
     private static let frozenClockGrace: Double = 1.0
 
     private var timeControlObservers: [NSKeyValueObservation] = []

@@ -42,6 +42,7 @@ struct MotionArtworkView: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .clipped()
     }
 
     @ViewBuilder
@@ -50,7 +51,7 @@ struct MotionArtworkView: View {
             if let videoURL, let firstFrame = MotionArtworkCache.shared.firstFrame(for: videoURL) {
                 Image(platformImage: firstFrame)
                     .resizable()
-                    .aspectRatio(contentMode: aspectRatio != nil ? .fit : .fill)
+                    .aspectRatio(aspectRatio ?? 1, contentMode: .fill)
             } else {
                 CoverArtView(
                     id: fallbackId,
@@ -59,7 +60,7 @@ struct MotionArtworkView: View {
                     cornerRadius: cornerRadius,
                     initialImage: fallbackImage
                 )
-                .aspectRatio(aspectRatio ?? 1, contentMode: aspectRatio != nil ? .fit : .fill)
+                .aspectRatio(aspectRatio ?? 1, contentMode: .fill)
             }
 
             // Capa de video animado en bucle si existe URL
@@ -179,8 +180,10 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
             cleanCurrentItem()
 
             if !url.isFileURL && effectiveURL == url {
-                Task {
-                    _ = try? await MotionArtworkCache.shared.loadOrDownload(for: url)
+                if !UserDefaults.standard.bool(forKey: "minidisc_data_saver_enabled") {
+                    Task {
+                        _ = try? await MotionArtworkCache.shared.loadOrDownload(for: url)
+                    }
                 }
             }
 
@@ -196,7 +199,7 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
 
             self.player = avPlayer
             view.playerLayer.player = avPlayer
-            view.playerLayer.videoGravity = .resizeAspect
+            view.playerLayer.videoGravity = .resizeAspectFill
 
             readyObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
                 if item.status == .readyToPlay {
@@ -279,7 +282,7 @@ private class PlayerContainerUIView: UIView {
         clipsToBounds = true
         layer.masksToBounds = true
         playerLayer.masksToBounds = true
-        playerLayer.videoGravity = .resizeAspect
+        playerLayer.videoGravity = .resizeAspectFill
     }
 
     override func layoutSubviews() {

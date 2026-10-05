@@ -2844,9 +2844,10 @@ actor PlayerService: PlayerServiceProtocol {
         }
 
         let currentProgress = engine.progress
-        let effectiveDuration = snapshot.duration > 0 ? snapshot.duration : engine.duration
+        let effectiveDuration = max(snapshot.duration, max(snapshot.track?.duration ?? 0, engine.duration))
+        let nearEndThreshold = max(8.0, crossfadeConfig.duration + 3.0)
         if effectiveDuration > 0,
-           (currentProgress >= effectiveDuration - 2.5 || snapshot.position >= effectiveDuration - 2.5) {
+           (currentProgress >= effectiveDuration - nearEndThreshold || snapshot.position >= effectiveDuration - nearEndThreshold) {
             cancelNetworkRecoveryValidation()
             networkReloadRequiredTrackID = nil
             networkRecoveryAttemptBudget.reset()
@@ -3799,11 +3800,23 @@ actor PlayerService: PlayerServiceProtocol {
             }
         case .buffering, .paused:
             playbackProgressTracker.breakContinuity()
-            let currentDuration = await MainActor.run { state.duration }
-            let effectiveDuration = currentDuration > 0 ? currentDuration : engine.duration
-            let currentPos = engine.progress
-            let isNearEnd = effectiveDuration > 0 && currentPos >= effectiveDuration - 2.5
-            if !isNearEnd && !endOfTrackEventsInProgress.contains(playbackToken) {
+            let (currentDuration, trackDuration, position) = await MainActor.run {
+                (state.duration, state.currentTrack?.duration ?? 0, state.position)
+            }
+            let effectiveDuration = max(currentDuration, max(trackDuration, engine.duration))
+            let currentPos = max(engine.progress, position)
+            let nearEndThreshold = max(8.0, crossfadeConfig.duration + 3.0)
+            let isNearEnd = effectiveDuration > 0 && currentPos >= effectiveDuration - nearEndThreshold
+            if isNearEnd {
+                if newState == .paused && !endOfTrackEventsInProgress.contains(playbackToken) {
+                    let endTransition = AudioEngineTrackEnd(
+                        endedPlaybackToken: playbackToken,
+                        endedPosition: currentPos,
+                        promotedPlayback: nil
+                    )
+                    await handleEndOfTrack(endTransition)
+                }
+            } else if !endOfTrackEventsInProgress.contains(playbackToken) {
                 await armRecoveryForUnexpectedEngineStall(playbackToken: playbackToken)
                 if newState == .paused {
                     await resumeAfterNetworkPauseIfNeeded(playbackToken: playbackToken)
@@ -3827,7 +3840,8 @@ actor PlayerService: PlayerServiceProtocol {
             (
                 playbackState: state.playbackState,
                 trackID: state.currentTrack?.id,
-                duration: state.duration
+                duration: state.duration,
+                trackDuration: state.currentTrack?.duration ?? 0
             )
         }
         guard isCurrentEngineEvent(playbackToken),
@@ -3836,9 +3850,10 @@ actor PlayerService: PlayerServiceProtocol {
               networkReloadRequiredTrackID == trackID else { return }
 
         let progress = engine.progress
-        let effectiveDuration = snapshot.duration > 0 ? snapshot.duration : engine.duration
+        let effectiveDuration = max(snapshot.duration, max(snapshot.trackDuration, engine.duration))
+        let nearEndThreshold = max(8.0, crossfadeConfig.duration + 3.0)
         if effectiveDuration > 0,
-           progress >= effectiveDuration - 2.5 {
+           progress >= effectiveDuration - nearEndThreshold {
             // A pause at the end belongs to the normal queue transition, not network recovery.
             return
         }
@@ -3858,6 +3873,7 @@ actor PlayerService: PlayerServiceProtocol {
             (trackID: state.currentTrack?.id, playbackState: state.playbackState,
              serverID: serverService.state.activeServer?.id,
              duration: state.duration,
+             trackDuration: state.currentTrack?.duration ?? 0,
              position: state.position)
         }
         guard audioSystemRecovery == nil, isCurrentEngineEvent(playbackToken),
@@ -3866,9 +3882,10 @@ actor PlayerService: PlayerServiceProtocol {
               currentSourceIsRemoteStream, snapshot.playbackState == .playing else { return }
 
         let progress = engine.progress
-        let effectiveDuration = snapshot.duration > 0 ? snapshot.duration : engine.duration
+        let effectiveDuration = max(snapshot.duration, max(snapshot.trackDuration, engine.duration))
+        let nearEndThreshold = max(8.0, crossfadeConfig.duration + 3.0)
         if effectiveDuration > 0,
-           (progress >= effectiveDuration - 2.5 || snapshot.position >= effectiveDuration - 2.5) {
+           (progress >= effectiveDuration - nearEndThreshold || snapshot.position >= effectiveDuration - nearEndThreshold) {
             return
         }
         let localSource = await mediaResolver.localSource(songId: trackID, serverId: serverID)

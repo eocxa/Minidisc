@@ -130,6 +130,13 @@ actor MotionArtworkCache {
     }
 
     func loadOrDownload(for remoteURL: URL) async throws -> URL {
+        if UserDefaults.standard.bool(forKey: "minidisc_data_saver_enabled") {
+            if let local = cachedURL(for: remoteURL) {
+                _ = await extractFirstFrame(for: remoteURL)
+                return local
+            }
+            throw CancellationError()
+        }
         if !persistMotionArtworkEnabled {
             _ = await extractFirstFrame(for: remoteURL)
             return remoteURL

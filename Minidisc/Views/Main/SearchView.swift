@@ -368,7 +368,7 @@ struct SearchView: View {
                                     )
                                 }
                                 do {
-                                    try await container?.playerService.play(tracks: songs, startIndex: index)
+                                    try await container?.playerService.play(tracks: [song], startIndex: 0)
                                 } catch {
                                     Logger.player.error("[PLAYBACK] play failed: \(error, privacy: .public)")
                 if !UserFacingError.isCancellation(error) {
@@ -440,28 +440,22 @@ struct SearchView: View {
             } else {
                 List {
                     Section {
-                        LazyVStack(spacing: 0) {
-                            ForEach(Array(rowsData.enumerated()), id: \.element.id) { index, rowData in
-                                SearchHistoryEntryRow(
-                                    data: rowData,
-                                    isDownloaded: rowData.itemType == "song"
-                                        ? downloadedSongIds.contains(rowData.itemId)
-                                        : downloadedAlbumIds.contains(rowData.itemId),
-                                    onSelect: { select(rowData) },
-                                    onPlaySong: { playSong(rowData) },
-                                    onAddToPlaylist: playlistAddition.present,
-                                    onDownloadAlbum: { downloadAlbum(rowData) }
-                                )
-                                if index < rowsData.count - 1 {
-                                    Divider()
-                                        .overlay(Color.primary.opacity(0.12))
-                                        .padding(.leading, 76)
-                                }
-                            }
+                        ForEach(Array(rowsData.enumerated()), id: \.element.id) { index, rowData in
+                            SearchHistoryEntryRow(
+                                data: rowData,
+                                isDownloaded: rowData.itemType == "song"
+                                    ? downloadedSongIds.contains(rowData.itemId)
+                                    : downloadedAlbumIds.contains(rowData.itemId),
+                                onSelect: { select(rowData) },
+                                onPlaySong: { playSong(rowData) },
+                                onAddToPlaylist: playlistAddition.present,
+                                onDownloadAlbum: { downloadAlbum(rowData) }
+                            )
+                            .listRowInsets(EdgeInsets())
+                            .listRowSeparator(index < rowsData.count - 1 ? .visible : .hidden)
+                            .alignmentGuide(.listRowSeparatorLeading) { _ in 76 }
+                            .listRowBackground(Color.clear)
                         }
-                        .listRowInsets(EdgeInsets())
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
                     } header: {
                         HStack {
                             Text("Recently Searched")

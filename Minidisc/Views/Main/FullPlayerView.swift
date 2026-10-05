@@ -81,22 +81,34 @@ struct FullPlayerView: View {
         return cached
     }
 
+    private var isDataSaverEnabled: Bool {
+        UserDefaults.standard.bool(forKey: "minidisc_data_saver_enabled")
+    }
+
     private var resolvedAnimatedTallURL: URL? {
         guard !UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_disabled") else { return nil }
         guard !showLyrics else { return nil }
-        return NowLocalService.shared.resolveArtworkURL(
+        guard let url = NowLocalService.shared.resolveArtworkURL(
             path: effectiveTrackEnrichment?.animatedTallUrl,
             activeServerBaseURL: container?.serverState.activeServer?.baseURL
-        )
+        ) else { return nil }
+        if isDataSaverEnabled && MotionArtworkCache.shared.cachedURL(for: url) == nil {
+            return nil
+        }
+        return url
     }
 
     private var resolvedAnimatedSquareURL: URL? {
         guard !UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_disabled") else { return nil }
         guard !showLyrics else { return nil }
-        return NowLocalService.shared.resolveArtworkURL(
+        guard let url = NowLocalService.shared.resolveArtworkURL(
             path: effectiveTrackEnrichment?.animatedSquareUrl,
             activeServerBaseURL: container?.serverState.activeServer?.baseURL
-        )
+        ) else { return nil }
+        if isDataSaverEnabled && MotionArtworkCache.shared.cachedURL(for: url) == nil {
+            return nil
+        }
+        return url
     }
 
     private var resolvedAnimatedCoverURL: URL? {
@@ -573,8 +585,12 @@ struct FullPlayerView: View {
             let artworkSide = min(geo.size.width, geo.size.height)
             let isCanvas = hasMotionCanvas && isSource && !showLyrics
 
+            let effectiveAnimatedURL = isCanvas
+                ? (resolvedAnimatedTallURL ?? resolvedAnimatedSquareURL)
+                : (resolvedAnimatedSquareURL ?? resolvedAnimatedTallURL)
+
             Group {
-                if let animatedURL = resolvedAnimatedCoverURL, isSource, !showLyrics {
+                if let animatedURL = effectiveAnimatedURL, isSource, !showLyrics {
                     let tallHeight = geo.size.width * 4.0 / 3.0
                     MotionArtworkView(
                         videoURL: animatedURL,

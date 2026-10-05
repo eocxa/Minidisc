@@ -36,4 +36,19 @@ struct StreamSettingsTests {
         #expect(restored.wifiQuality == .mp3_320)
         #expect(restored.cellularQuality == .mp3_192)
     }
+
+    @Test("Data Saver forces MP3 192kbps streaming quality")
+    func dataSaverForcesMP3192() {
+        let suiteName = "test.stream-settings.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = StreamSettings(defaults: defaults)
+        settings.wifiQuality = .original
+        settings.networkPathDidChange(isCellular: false)
+        #expect(settings.currentQuality == .original)
+
+        defaults.set(true, forKey: "minidisc_data_saver_enabled")
+        #expect(settings.currentQuality == .mp3_192)
+    }
 }
