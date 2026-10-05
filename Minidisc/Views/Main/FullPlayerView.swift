@@ -585,13 +585,12 @@ struct FullPlayerView: View {
             let artworkSide = min(geo.size.width, geo.size.height)
             let isCanvas = hasMotionCanvas && isSource && !showLyrics
 
-            let effectiveAnimatedURL = isCanvas
-                ? (resolvedAnimatedTallURL ?? resolvedAnimatedSquareURL)
-                : (resolvedAnimatedSquareURL ?? resolvedAnimatedTallURL)
+            let effectiveAnimatedURL = resolvedAnimatedCoverURL
+            let canvasWidth = isCanvas ? geo.size.width : artworkSide
+            let canvasHeight = isCanvas ? min(geo.size.height, max(artworkSide, geo.size.width * 4.0 / 3.0)) : artworkSide
 
             Group {
                 if let animatedURL = effectiveAnimatedURL, isSource, !showLyrics {
-                    let tallHeight = geo.size.width * 4.0 / 3.0
                     MotionArtworkView(
                         videoURL: animatedURL,
                         fallbackId: coverArtId,
@@ -608,8 +607,8 @@ struct FullPlayerView: View {
                         }
                     )
                     .frame(
-                        width: isCanvas ? geo.size.width : artworkSide,
-                        height: isCanvas ? tallHeight : artworkSide
+                        width: canvasWidth,
+                        height: canvasHeight
                     )
                     .clipped()
                     .mask {
@@ -617,7 +616,7 @@ struct FullPlayerView: View {
                             LinearGradient(
                                 stops: [
                                     .init(color: .black, location: 0),
-                                    .init(color: .black, location: 2.0 / 3.0),
+                                    .init(color: .black, location: 0.7),
                                     .init(color: .clear, location: 1.0)
                                 ],
                                 startPoint: .top,
@@ -639,14 +638,17 @@ struct FullPlayerView: View {
                 }
             }
             .matchedGeometryEffect(id: "playerArtwork", in: artworkNamespace ?? morphNS, isSource: isSource)
-            .frame(width: isSource ? (isCanvas ? geo.size.width : artworkSide) : nil,
-                   height: isSource ? (isCanvas ? (geo.size.width * 4.0 / 3.0) : artworkSide) : nil)
+            .frame(
+                width: isSource ? canvasWidth : nil,
+                height: isSource ? canvasHeight : nil
+            )
             .shadow(
                 color: isCanvas ? .clear : (isSource ? Color.black.opacity(0.28) : Color.black.opacity(0.12)),
                 radius: isSource ? 18 : 6,
                 y: isSource ? 10 : 3
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: isCanvas ? .top : .center)
+            .clipped()
             .trackSwipeGesture(
                 interaction: trackSwipe,
                 playerState: playerState,

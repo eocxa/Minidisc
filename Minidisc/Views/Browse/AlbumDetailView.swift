@@ -154,9 +154,7 @@ struct AlbumDetailView: View {
     }
 
     private var resolvedAnimatedCoverURL: URL? {
-        hasTallAnimatedCover
-            ? (resolvedAnimatedTallURL ?? resolvedAnimatedSquareURL)
-            : (resolvedAnimatedSquareURL ?? resolvedAnimatedTallURL)
+        resolvedAnimatedTallURL ?? resolvedAnimatedSquareURL
     }
 
     private var hasTallAnimatedCover: Bool {
@@ -847,7 +845,7 @@ struct AlbumArtworkSection: View {
                 if isTall {
                     GeometryReader { geo in
                         let width = geo.size.width
-                        let tallHeight = width * 4.0 / 3.0
+                        let tallHeight = max(geo.size.height, width * 4.0 / 3.0)
 
                         MotionArtworkView(
                             videoURL: animatedURL,
@@ -858,21 +856,21 @@ struct AlbumArtworkSection: View {
                             onReady: onVideoReady
                         )
                         .frame(width: width, height: tallHeight)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .mask {
-                            LinearGradient(
-                                stops: [
-                                    .init(color: .black, location: 0),
-                                    .init(color: .black, location: 2.0 / 3.0),
-                                    .init(color: .clear, location: 1.0)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         .shadow(color: .clear, radius: 0, y: 0)
                     }
                     .frame(height: 440)
+                    .mask {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .black, location: 0.65),
+                                .init(color: .clear, location: 1.0)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    }
                     .clipped()
                     .id(animatedURL)
                 } else {

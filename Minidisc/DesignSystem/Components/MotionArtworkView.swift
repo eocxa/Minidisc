@@ -51,7 +51,7 @@ struct MotionArtworkView: View {
             if let videoURL, let firstFrame = MotionArtworkCache.shared.firstFrame(for: videoURL) {
                 Image(platformImage: firstFrame)
                     .resizable()
-                    .aspectRatio(aspectRatio ?? 1, contentMode: .fill)
+                    .aspectRatio(contentMode: .fill)
             } else {
                 CoverArtView(
                     id: fallbackId,
@@ -60,7 +60,7 @@ struct MotionArtworkView: View {
                     cornerRadius: cornerRadius,
                     initialImage: fallbackImage
                 )
-                .aspectRatio(aspectRatio ?? 1, contentMode: .fill)
+                .aspectRatio(contentMode: .fill)
             }
 
             // Capa de video animado en bucle si existe URL
@@ -76,6 +76,8 @@ struct MotionArtworkView: View {
                 .opacity(isVideoReady ? 1.0 : 0.0)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
     }
 }
 
@@ -283,11 +285,18 @@ private class PlayerContainerUIView: UIView {
         layer.masksToBounds = true
         playerLayer.masksToBounds = true
         playerLayer.videoGravity = .resizeAspectFill
+        setContentHuggingPriority(.defaultLow, for: .horizontal)
+        setContentHuggingPriority(.defaultLow, for: .vertical)
+        setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        setContentCompressionResistancePriority(.defaultLow, for: .vertical)
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         playerLayer.frame = bounds
+        CATransaction.commit()
     }
 
     required init?(coder: NSCoder) {
