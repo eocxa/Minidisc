@@ -134,6 +134,9 @@ nonisolated protocol AudioEngine: AnyObject, Sendable {
     /// Applies a ReplayGain loudness adjustment in dB for the current track (0 = no change).
     func applyReplayGain(dB: Float)
 
+    /// Applies 6-band graphic equalizer configuration.
+    func applyEqualizer(config: EqualizerConfig)
+
     /// Hints that `url` will very likely be the next `play` target, so the engine can pre-buffer it
     /// for a seamless hand-off. `crossfadeDuration` == 0 asks for a gapless butt-splice; > 0 asks the
     /// engine to blend the two tracks over that window. A later `play` with the same stable track ID

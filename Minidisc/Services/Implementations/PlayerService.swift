@@ -115,6 +115,7 @@ actor PlayerService: PlayerServiceProtocol {
     private let cacheSettings: CacheSettings
     private let playbackPreferences: PlaybackPreferences
     private let replayGainSettings: ReplayGainSettings
+    private let equalizerSettings: EqualizerSettings
     private let crossfadeSettings: CrossfadeSettings
     private var crossfadeConfig = CrossfadeConfig(duration: 0, disableForGapless: true)
     private var nowPlayingService: (any NowPlayingServiceProtocol)?
@@ -249,6 +250,7 @@ actor PlayerService: PlayerServiceProtocol {
         cacheSettings: CacheSettings,
         playbackPreferences: PlaybackPreferences,
         replayGainSettings: ReplayGainSettings,
+        equalizerSettings: EqualizerSettings,
         crossfadeSettings: CrossfadeSettings,
         initialCrossfadeConfig: CrossfadeConfig,
         toastService: ToastService,
@@ -273,6 +275,7 @@ actor PlayerService: PlayerServiceProtocol {
         self.cacheSettings = cacheSettings
         self.playbackPreferences = playbackPreferences
         self.replayGainSettings = replayGainSettings
+        self.equalizerSettings = equalizerSettings
         self.crossfadeSettings = crossfadeSettings
         self.crossfadeConfig = initialCrossfadeConfig
         self.toastService = toastService
@@ -289,6 +292,7 @@ actor PlayerService: PlayerServiceProtocol {
         self.cacheSession = URLSession(configuration: cacheConfig)
 
         self.engine = engine
+        engine.applyEqualizer(config: equalizerSettings.config)
         let bridge = AudioEngineBridge()
         self.engineBridge = bridge
         bridge.connect(to: self)
@@ -1340,6 +1344,11 @@ actor PlayerService: PlayerServiceProtocol {
         if let track {
             logReplayGain(track: track, config: config, appliedDB: replayGainDB, context: "settings")
         }
+    }
+
+    func equalizerSettingsDidChange() async {
+        let config = await MainActor.run { equalizerSettings.config }
+        engine.applyEqualizer(config: config)
     }
 
     private func logReplayGain(

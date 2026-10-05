@@ -208,22 +208,26 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
         func findAlbumEnrichment() -> NowLocalEnrichment? {
             guard !alb.isEmpty else { return nil }
             if let exact = cache[albumKey] ?? cache[albumOnlyKey] {
-                if let valAlb = exact.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-                   valAlb == alb {
+                if let valAlb = exact.album, NowLocalService.albumsMatch(valAlb, alb) {
                     return exact
                 }
             }
             if let prefixMatch = cache.first(where: { (k, v) in
-                ((k.hasPrefix("\(alb)_") && k.hasSuffix("_")) || k == "\(alb)__") &&
-                (v.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == alb)
+                let parts = k.split(separator: "_", omittingEmptySubsequences: false)
+                guard let kAlb = parts.first, !kAlb.isEmpty else { return false }
+                return NowLocalService.albumsMatch(String(kAlb), alb) &&
+                       ((k.hasSuffix("_") || k == "\(kAlb)__")) &&
+                       NowLocalService.albumsMatch(v.album, alb)
             })?.value {
                 return prefixMatch
             }
             // Check if any track from this exact album has animated artwork cached
             if let trackWithMotion = cache.first(where: { (k, v) in
-                k.hasPrefix("\(alb)_") &&
-                (v.animatedTallUrl != nil || v.animatedSquareUrl != nil) &&
-                (v.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == alb)
+                let parts = k.split(separator: "_", omittingEmptySubsequences: false)
+                guard let kAlb = parts.first, !kAlb.isEmpty else { return false }
+                return NowLocalService.albumsMatch(String(kAlb), alb) &&
+                       (v.animatedTallUrl != nil || v.animatedSquareUrl != nil) &&
+                       NowLocalService.albumsMatch(v.album, alb)
             })?.value {
                 return stripLyrics(trackWithMotion)
             }
@@ -233,7 +237,7 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
         if !tit.isEmpty {
             if let exact = cache[trackKey] {
                 // Ensure track matches album if provided
-                if !alb.isEmpty, let exactAlb = exact.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !exactAlb.isEmpty && exactAlb != alb {
+                if !alb.isEmpty, let exactAlb = exact.album, !exactAlb.isEmpty && !NowLocalService.albumsMatch(exactAlb, alb) {
                     return nil
                 }
                 // If track is cached without motion artwork, inherit from album if available
@@ -274,7 +278,7 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
             // Strictly prevent writing to keys belonging to another album
             if !enAlb.isEmpty {
                 let parts = keyLower.split(separator: "_", omittingEmptySubsequences: false)
-                if let keyAlb = parts.first, !keyAlb.isEmpty && keyAlb != enAlb {
+                if let keyAlb = parts.first, !keyAlb.isEmpty && !NowLocalService.albumsMatch(String(keyAlb), enAlb) {
                     continue
                 }
             }
@@ -406,7 +410,7 @@ actor NowLocalService {
         return nil
     }
 
-    private func cleanMetadata(_ string: String) -> String {
+    nonisolated static func cleanMetadata(_ string: String) -> String {
         var result = string
         let patterns = [
             "\\s*\\(.*?remaster.*?\\)",
@@ -419,8 +423,19 @@ actor NowLocalService {
             "\\s*\\[.*?version.*?\\]",
             "\\s*\\(.*?edition.*?\\)",
             "\\s*\\[.*?edition.*?\\]",
+            "\\s*\\(.*?anniversary.*?\\)",
+            "\\s*\\[.*?anniversary.*?\\]",
+            "\\s*\\(.*?expanded.*?\\)",
+            "\\s*\\[.*?expanded.*?\\]",
+            "\\s*\\(.*?special.*?\\)",
+            "\\s*\\[.*?special.*?\\]",
             "\\s*\\(.*?explicit.*?\\)",
-            "\\s*\\[.*?explicit.*?\\]"
+            "\\s*\\[.*?explicit.*?\\]",
+            "\\s*\\(.*?single.*?\\)",
+            "\\s*\\[.*?single.*?\\]",
+            "\\s*-\\s*(single|ep|lp)\\b",
+            "\\s*\\(.*?ep\\b.*?\\)",
+            "\\s*\\[.*?ep\\b.*?\\]"
         ]
         for pattern in patterns {
             if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
@@ -428,6 +443,27 @@ actor NowLocalService {
             }
         }
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    nonisolated static func normalizeAlbumString(_ s: String) -> String {
+        var res = cleanMetadata(s).lowercased()
+        res = res.folding(options: .diacriticInsensitive, locale: .current)
+        res = res.replacingOccurrences(of: "[^a-z0-9\\s]", with: "", options: .regularExpression)
+        return res.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    nonisolated static func albumsMatch(_ albumA: String?, _ albumB: String?) -> Bool {
+        guard let a = albumA?.trimmingCharacters(in: .whitespacesAndNewlines), !a.isEmpty,
+              let b = albumB?.trimmingCharacters(in: .whitespacesAndNewlines), !b.isEmpty else {
+            return false
+        }
+        if a.caseInsensitiveCompare(b) == .orderedSame { return true }
+        let normA = normalizeAlbumString(a)
+        let normB = normalizeAlbumString(b)
+        if normA.isEmpty || normB.isEmpty { return false }
+        if normA == normB { return true }
+        if normA.contains(normB) || normB.contains(normA) { return true }
+        return false
     }
 
     private func titlesMatch(_ titleA: String, _ titleB: String) -> Bool {
@@ -465,10 +501,10 @@ actor NowLocalService {
             let decoder = JSONDecoder()
             let enrichment = try decoder.decode(NowLocalEnrichment.self, from: data)
             if enrichment.found {
-                // Strictly verify that if an album was requested, the returned enrichment actually matches this album!
-                if let requestedAlbum = album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !requestedAlbum.isEmpty {
-                    if let returnedAlbum = enrichment.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !returnedAlbum.isEmpty {
-                        if returnedAlbum != requestedAlbum {
+                // Verify that if an album was requested, the returned enrichment actually matches this album!
+                if let requestedAlbum = album, !requestedAlbum.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if let returnedAlbum = enrichment.album, !returnedAlbum.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        if !Self.albumsMatch(returnedAlbum, requestedAlbum) {
                             // Server matched another album! Do not accept cross-album enrichment!
                             return nil
                         }
@@ -534,18 +570,18 @@ actor NowLocalService {
 
                 if !titQ.isEmpty && titlesMatch(tTit, title ?? "") && (artQ.isEmpty || tArt.contains(artQ) || artQ.contains(tArt)) {
                     // Strictly isolate by album if album was requested
-                    if !albQ.isEmpty && tAlb != albQ {
+                    if !albQ.isEmpty && !NowLocalService.albumsMatch(tAlb, albQ) {
                         continue
                     }
                     bestTrack = t
                     exactTitleMatch = true
                     break
                 }
-                if !albQ.isEmpty && tAlb == albQ && (artQ.isEmpty || tArt.contains(artQ) || artQ.contains(tArt)) {
+                if !albQ.isEmpty && NowLocalService.albumsMatch(tAlb, albQ) && (artQ.isEmpty || tArt.contains(artQ) || artQ.contains(tArt)) {
                     if bestTrack == nil { bestTrack = t }
                     if titQ.isEmpty { break }
                 }
-                if !albQ.isEmpty && tAlb == albQ && bestTrack == nil {
+                if !albQ.isEmpty && NowLocalService.albumsMatch(tAlb, albQ) && bestTrack == nil {
                     bestTrack = t
                 }
             }

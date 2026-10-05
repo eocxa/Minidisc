@@ -52,6 +52,7 @@ final class AppContainer {
     let externalArtistImageResolver = ExternalArtistImageResolver()
     let searchHistoryService: SearchHistoryService
     let replayGainSettings: ReplayGainSettings
+    let equalizerSettings: EqualizerSettings
     let crossfadeSettings: CrossfadeSettings
     let streamSettings: StreamSettings
     let lidarrSettings: LidarrSettings
@@ -73,6 +74,7 @@ final class AppContainer {
         cacheSettings = CacheSettings(defaults: userDefaults)
         externalProvidersStore = ExternalProvidersStore(defaults: userDefaults)
         replayGainSettings = ReplayGainSettings(defaults: userDefaults)
+        equalizerSettings = EqualizerSettings(defaults: userDefaults)
         crossfadeSettings = CrossfadeSettings(defaults: userDefaults)
         streamSettings = StreamSettings(defaults: userDefaults)
         lyricsSettings = LyricsSettings(defaults: userDefaults)
@@ -200,6 +202,7 @@ final class AppContainer {
             cacheSettings: cacheSettings,
             playbackPreferences: playbackPreferences,
             replayGainSettings: replayGainSettings,
+            equalizerSettings: equalizerSettings,
             crossfadeSettings: crossfadeSettings,
             initialCrossfadeConfig: crossfadeSettings.config,
             toastService: toastService,

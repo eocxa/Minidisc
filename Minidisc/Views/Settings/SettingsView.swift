@@ -841,6 +841,25 @@ private struct PlaybackSettingsView: View {
             if let lyrics = container?.lyricsSettings {
                 LyricsSettingsSection(settings: lyrics)
             }
+            if let eq = container?.equalizerSettings {
+                Section {
+                    NavigationLink {
+                        EqualizerSettingsView(settings: eq)
+                    } label: {
+                        HStack {
+                            Text("Equalizer")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Text(eq.enabled ? eq.preset.displayName : "Off")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Equalizer")
+                } footer: {
+                    Text("Customize frequency curves with presets or manual 6-band adjustment.")
+                }
+            }
             ReplayGainSettingsSection()
             CrossfadeSettingsSection()
         }

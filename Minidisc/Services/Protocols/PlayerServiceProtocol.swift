@@ -51,6 +51,9 @@ protocol PlayerServiceProtocol: AnyObject, Sendable {
     /// Re-reads ReplayGainSettings and reapplies gain to the current track.
     /// Call this whenever the user changes any ReplayGain setting.
     func replayGainSettingsDidChange() async
+    /// Re-reads EqualizerSettings and reapplies filter bands.
+    /// Call this whenever the user changes any Equalizer setting.
+    func equalizerSettingsDidChange() async
     /// Updates the stored CrossfadeConfig snapshot without rebuilding a transition already prepared.
     /// Call whenever the user changes any crossfade setting; the new value applies to the next preload.
     func crossfadeSettingsDidChange() async

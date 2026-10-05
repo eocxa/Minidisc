@@ -476,6 +476,16 @@ nonisolated final class AVPlayerEngine: AudioEngine, @unchecked Sendable {
         }
     }
 
+    func applyEqualizer(config: EqualizerConfig) {
+        lock.lock()
+        defer { lock.unlock() }
+        contextA.updateEqualizer(config: config)
+        contextB.updateEqualizer(config: config)
+        if currentItem != nil, currentAsset != nil, let trackID = currentTrackID {
+            installReplayGainTapIfNeeded(context: activeContext, trackID: trackID)
+        }
+    }
+
     var progress: Double {
         lock.lock()
         defer { lock.unlock() }
@@ -1025,7 +1035,7 @@ nonisolated final class AVPlayerEngine: AudioEngine, @unchecked Sendable {
         }
         previousTask?.cancel()
 
-        guard Self.requiresReplayGainTap(linearGain: context.gain) else { return }
+        guard Self.requiresAudioTap(context: context) else { return }
         // `item` and `asset` are intentionally not captured by the Task: both are non-Sendable
         // Objective-C references. The asynchronous worker resolves them from the locked engine state.
         let request = makeReplayGainInstallRequest(context: context, trackID: trackID)
@@ -1083,7 +1093,7 @@ nonisolated final class AVPlayerEngine: AudioEngine, @unchecked Sendable {
 
         let installed = lock.withLock {
             guard let target = replayGainTarget(for: request),
-                  Self.requiresReplayGainTap(linearGain: target.context.gain),
+                  Self.requiresAudioTap(context: target.context),
                   !target.context.tapInstalled,
                   let tap = Self.makeReplayGainTap(context: target.context) else { return false }
 
@@ -1139,6 +1149,10 @@ nonisolated final class AVPlayerEngine: AudioEngine, @unchecked Sendable {
         linearGain > 1
     }
 
+    nonisolated static func requiresAudioTap(context: ReplayGainTapContext) -> Bool {
+        requiresReplayGainTap(linearGain: context.gain) || context.isEqualizerActive
+    }
+
     nonisolated static func replayGainDeckVolumeScale(linearGain: Float, tapInstalled: Bool) -> Float {
         tapInstalled ? 1 : min(linearGain, 1)
     }
@@ -1150,7 +1164,7 @@ nonisolated final class AVPlayerEngine: AudioEngine, @unchecked Sendable {
             clientInfo: clientInfo,
             init: replayGainTapInit,
             finalize: replayGainTapFinalize,
-            prepare: nil,
+            prepare: replayGainTapPrepare,
             unprepare: nil,
             process: replayGainTapProcess
         )
@@ -1165,13 +1179,40 @@ nonisolated final class AVPlayerEngine: AudioEngine, @unchecked Sendable {
     }
 }
 
-// MARK: - ReplayGain audio tap
+// MARK: - ReplayGain and Equalizer audio tap
 
-/// Shared between the engine and the realtime render callback. The Float bit pattern is atomic so
-/// the callback never takes a lock and the access remains valid under Swift's memory model.
+private struct BiquadCoeffs: Sendable {
+    var b0: Float = 1
+    var b1: Float = 0
+    var b2: Float = 0
+    var a1: Float = 0
+    var a2: Float = 0
+    var isBypassed: Bool = true
+}
+
+private struct BiquadChannelState {
+    var s1: Float = 0
+    var s2: Float = 0
+}
+
+/// Shared between the engine and the realtime render callback.
 private nonisolated final class ReplayGainTapContext: @unchecked Sendable {
     private let gainBits = Atomic<UInt32>(Float(1).bitPattern)
     private let tapInstalledBits = Atomic<UInt8>(0)
+    private let eqActiveBits = Atomic<UInt8>(0)
+    private let activeBank = Atomic<UInt32>(0)
+
+    private var bank0: [BiquadCoeffs] = Array(repeating: BiquadCoeffs(), count: 6)
+    private var bank1: [BiquadCoeffs] = Array(repeating: BiquadCoeffs(), count: 6)
+
+    var statesCh0: [BiquadChannelState] = Array(repeating: BiquadChannelState(), count: 6)
+    var statesCh1: [BiquadChannelState] = Array(repeating: BiquadChannelState(), count: 6)
+
+    private var sampleRate: Double = 44100.0
+    private var currentGains: [Float] = [0, 0, 0, 0, 0, 0]
+    private let lock = NSLock()
+
+    static let bandFrequencies: [Double] = [60.0, 150.0, 400.0, 1000.0, 2400.0, 15000.0]
 
     var gain: Float {
         get { Float(bitPattern: gainBits.load(ordering: .relaxed)) }
@@ -1183,8 +1224,84 @@ private nonisolated final class ReplayGainTapContext: @unchecked Sendable {
         set { tapInstalledBits.store(newValue ? 1 : 0, ordering: .relaxed) }
     }
 
+    var isEqualizerActive: Bool {
+        eqActiveBits.load(ordering: .relaxed) == 1
+    }
+
     var deckVolumeScale: Float {
         AVPlayerEngine.replayGainDeckVolumeScale(linearGain: gain, tapInstalled: tapInstalled)
+    }
+
+    func currentCoefficients() -> [BiquadCoeffs] {
+        let idx = activeBank.load(ordering: .acquiring)
+        return idx == 0 ? bank0 : bank1
+    }
+
+    func updateEqualizer(config: EqualizerConfig) {
+        lock.lock()
+        defer { lock.unlock() }
+        currentGains = config.gains
+        let isActive = config.enabled && (config.preset != .flat || config.gains.contains { abs($0) > 0.05 })
+        eqActiveBits.store(isActive ? 1 : 0, ordering: .relaxed)
+        recomputeCoefficientsLocked()
+    }
+
+    func setSampleRate(_ rate: Double) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard rate > 0, rate != sampleRate else { return }
+        sampleRate = rate
+        recomputeCoefficientsLocked()
+    }
+
+    private func recomputeCoefficientsLocked() {
+        let currentIdx = activeBank.load(ordering: .relaxed)
+        let targetBank = (currentIdx == 0) ? 1 : 0
+        var newCoeffs: [BiquadCoeffs] = []
+        let sr = sampleRate > 0 ? sampleRate : 44100.0
+        let nyquist = sr * 0.5
+
+        for i in 0..<6 {
+            let gain = i < currentGains.count ? currentGains[i] : 0
+            if abs(gain) <= 0.05 {
+                newCoeffs.append(BiquadCoeffs(b0: 1, b1: 0, b2: 0, a1: 0, a2: 0, isBypassed: true))
+                continue
+            }
+            let freq = min(Self.bandFrequencies[i], nyquist * 0.95)
+            guard freq > 10 else {
+                newCoeffs.append(BiquadCoeffs(b0: 1, b1: 0, b2: 0, a1: 0, a2: 0, isBypassed: true))
+                continue
+            }
+            let A = pow(10.0, Double(gain) / 40.0)
+            let w0 = 2.0 * Double.pi * freq / sr
+            let Q = 1.1
+            let alpha = sin(w0) / (2.0 * Q)
+            let cos_w0 = cos(w0)
+
+            let b0 = 1.0 + alpha * A
+            let b1 = -2.0 * cos_w0
+            let b2 = 1.0 - alpha * A
+            let a0 = 1.0 + alpha / A
+            let a1 = -2.0 * cos_w0
+            let a2 = 1.0 - alpha / A
+
+            let invA0 = Float(1.0 / a0)
+            newCoeffs.append(BiquadCoeffs(
+                b0: Float(b0) * invA0,
+                b1: Float(b1) * invA0,
+                b2: Float(b2) * invA0,
+                a1: Float(a1) * invA0,
+                a2: Float(a2) * invA0,
+                isBypassed: false
+            ))
+        }
+
+        if targetBank == 0 {
+            bank0 = newCoeffs
+        } else {
+            bank1 = newCoeffs
+        }
+        activeBank.store(UInt32(targetBank), ordering: .releasing)
     }
 }
 
@@ -1200,6 +1317,16 @@ private nonisolated func replayGainTapFinalize(tap: MTAudioProcessingTap) {
     Unmanaged<ReplayGainTapContext>.fromOpaque(MTAudioProcessingTapGetStorage(tap)).release()
 }
 
+private nonisolated func replayGainTapPrepare(
+    tap: MTAudioProcessingTap,
+    maxFrames: CMItemCount,
+    processingFormat: UnsafePointer<AudioStreamBasicDescription>
+) {
+    let context = Unmanaged<ReplayGainTapContext>.fromOpaque(MTAudioProcessingTapGetStorage(tap)).takeUnretainedValue()
+    let rate = processingFormat.pointee.mSampleRate
+    context.setSampleRate(rate > 0 ? rate : 44100.0)
+}
+
 private nonisolated func replayGainTapProcess(
     tap: MTAudioProcessingTap,
     numberFrames: CMItemCount,
@@ -1211,6 +1338,99 @@ private nonisolated func replayGainTapProcess(
     let status = MTAudioProcessingTapGetSourceAudio(tap, numberFrames, bufferListInOut, flagsOut, nil, numberFramesOut)
     guard status == noErr else { return }
     let context = Unmanaged<ReplayGainTapContext>.fromOpaque(MTAudioProcessingTapGetStorage(tap)).takeUnretainedValue()
+
+    if context.isEqualizerActive {
+        let coeffs = context.currentCoefficients()
+        let bufferList = UnsafeMutableAudioBufferListPointer(bufferListInOut)
+        let frames = Int(numberFramesOut.pointee)
+
+        if bufferList.count >= 2 {
+            // Non-interleaved stereo
+            if let d0 = bufferList[0].mData, let d1 = bufferList[1].mData {
+                let ch0 = d0.assumingMemoryBound(to: Float.self)
+                let ch1 = d1.assumingMemoryBound(to: Float.self)
+                for band in 0..<6 {
+                    let c = coeffs[band]
+                    guard !c.isBypassed else { continue }
+                    var s1_0 = context.statesCh0[band].s1
+                    var s2_0 = context.statesCh0[band].s2
+                    var s1_1 = context.statesCh1[band].s1
+                    var s2_1 = context.statesCh1[band].s2
+                    let b0 = c.b0, b1 = c.b1, b2 = c.b2, a1 = c.a1, a2 = c.a2
+                    for i in 0..<frames {
+                        let x0 = ch0[i]
+                        let y0 = b0 * x0 + s1_0
+                        s1_0 = b1 * x0 - a1 * y0 + s2_0
+                        s2_0 = b2 * x0 - a2 * y0
+                        ch0[i] = y0
+
+                        let x1 = ch1[i]
+                        let y1 = b0 * x1 + s1_1
+                        s1_1 = b1 * x1 - a1 * y1 + s2_1
+                        s2_1 = b2 * x1 - a2 * y1
+                        ch1[i] = y1
+                    }
+                    context.statesCh0[band].s1 = s1_0
+                    context.statesCh0[band].s2 = s2_0
+                    context.statesCh1[band].s1 = s1_1
+                    context.statesCh1[band].s2 = s2_1
+                }
+            }
+        } else if bufferList.count == 1, let d = bufferList[0].mData {
+            let chCount = Int(bufferList[0].mNumberChannels)
+            let samples = d.assumingMemoryBound(to: Float.self)
+            if chCount == 2 {
+                // Interleaved stereo
+                for band in 0..<6 {
+                    let c = coeffs[band]
+                    guard !c.isBypassed else { continue }
+                    var s1_0 = context.statesCh0[band].s1
+                    var s2_0 = context.statesCh0[band].s2
+                    var s1_1 = context.statesCh1[band].s1
+                    var s2_1 = context.statesCh1[band].s2
+                    let b0 = c.b0, b1 = c.b1, b2 = c.b2, a1 = c.a1, a2 = c.a2
+                    for i in 0..<frames {
+                        let i0 = i &* 2
+                        let i1 = i0 &+ 1
+                        let x0 = samples[i0]
+                        let y0 = b0 * x0 + s1_0
+                        s1_0 = b1 * x0 - a1 * y0 + s2_0
+                        s2_0 = b2 * x0 - a2 * y0
+                        samples[i0] = y0
+
+                        let x1 = samples[i1]
+                        let y1 = b0 * x1 + s1_1
+                        s1_1 = b1 * x1 - a1 * y1 + s2_1
+                        s2_1 = b2 * x1 - a2 * y1
+                        samples[i1] = y1
+                    }
+                    context.statesCh0[band].s1 = s1_0
+                    context.statesCh0[band].s2 = s2_0
+                    context.statesCh1[band].s1 = s1_1
+                    context.statesCh1[band].s2 = s2_1
+                }
+            } else if chCount == 1 {
+                // Mono
+                for band in 0..<6 {
+                    let c = coeffs[band]
+                    guard !c.isBypassed else { continue }
+                    var s1 = context.statesCh0[band].s1
+                    var s2 = context.statesCh0[band].s2
+                    let b0 = c.b0, b1 = c.b1, b2 = c.b2, a1 = c.a1, a2 = c.a2
+                    for i in 0..<frames {
+                        let x = samples[i]
+                        let y = b0 * x + s1
+                        s1 = b1 * x - a1 * y + s2
+                        s2 = b2 * x - a2 * y
+                        samples[i] = y
+                    }
+                    context.statesCh0[band].s1 = s1
+                    context.statesCh0[band].s2 = s2
+                }
+            }
+        }
+    }
+
     var gain = context.gain
     guard gain != 1.0 else { return }
     // Tap audio is 32-bit float; a flat multiply is correct whether channels are interleaved or not.
