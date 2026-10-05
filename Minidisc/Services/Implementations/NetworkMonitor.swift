@@ -76,9 +76,12 @@ final class NetworkMonitor {
         let continuation = channel.continuation
         let reducer = reducer
         monitor.pathUpdateHandler = { path in
-            continuation.yield(reducer.reduce(Self.descriptor(for: path)))
+            let descriptor = Self.descriptor(for: path)
+            MotionArtworkCache.shared.isCellular = descriptor.isCellular
+            continuation.yield(reducer.reduce(descriptor))
         }
         monitor.start(queue: queue)
+        MotionArtworkCache.shared.isCellular = monitor.currentPath.usesInterfaceType(.cellular)
         Logger.network.debug("NetworkMonitor started.")
     }
 

@@ -51,7 +51,7 @@ struct MotionArtworkView: View {
             if let videoURL, let firstFrame = MotionArtworkCache.shared.firstFrame(for: videoURL) {
                 Image(platformImage: firstFrame)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .aspectRatio(contentMode: .fit)
             } else {
                 CoverArtView(
                     id: fallbackId,
@@ -60,7 +60,7 @@ struct MotionArtworkView: View {
                     cornerRadius: cornerRadius,
                     initialImage: fallbackImage
                 )
-                .aspectRatio(contentMode: .fill)
+                .aspectRatio(contentMode: .fit)
             }
 
             // Capa de video animado en bucle si existe URL
@@ -182,7 +182,9 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
             cleanCurrentItem()
 
             if !url.isFileURL && effectiveURL == url {
-                if !UserDefaults.standard.bool(forKey: "minidisc_data_saver_enabled") {
+                let isDataSaver = UserDefaults.standard.bool(forKey: "minidisc_data_saver_enabled")
+                let isCellularRestricted = MotionArtworkCache.shared.isCellularRestricted
+                if !isDataSaver && !isCellularRestricted {
                     Task {
                         _ = try? await MotionArtworkCache.shared.loadOrDownload(for: url)
                     }
@@ -201,7 +203,7 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
 
             self.player = avPlayer
             view.playerLayer.player = avPlayer
-            view.playerLayer.videoGravity = .resizeAspectFill
+            view.playerLayer.videoGravity = .resizeAspect
 
             readyObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
                 if item.status == .readyToPlay {
@@ -284,7 +286,7 @@ private class PlayerContainerUIView: UIView {
         clipsToBounds = true
         layer.masksToBounds = true
         playerLayer.masksToBounds = true
-        playerLayer.videoGravity = .resizeAspectFill
+        playerLayer.videoGravity = .resizeAspect
         setContentHuggingPriority(.defaultLow, for: .horizontal)
         setContentHuggingPriority(.defaultLow, for: .vertical)
         setContentCompressionResistancePriority(.defaultLow, for: .horizontal)

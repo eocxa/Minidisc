@@ -129,13 +129,19 @@ struct AlbumDetailView: View {
         UserDefaults.standard.bool(forKey: "minidisc_data_saver_enabled")
     }
 
+    private var isCellularRestricted: Bool {
+        let disabledOnCellular = UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_cellular_disabled")
+        let isCellular = container?.serverState.isCellular ?? MotionArtworkCache.shared.isCellular
+        return disabledOnCellular && isCellular
+    }
+
     private var resolvedAnimatedSquareURL: URL? {
         guard !UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_disabled") else { return nil }
         guard let url = NowLocalService.shared.resolveArtworkURL(
             path: effectiveEnrichment?.animatedSquareUrl,
             activeServerBaseURL: container?.serverState.activeServer?.baseURL
         ) else { return nil }
-        if isDataSaverEnabled && MotionArtworkCache.shared.cachedURL(for: url) == nil {
+        if (isDataSaverEnabled || isCellularRestricted) && MotionArtworkCache.shared.cachedURL(for: url) == nil {
             return nil
         }
         return url
@@ -147,7 +153,7 @@ struct AlbumDetailView: View {
             path: effectiveEnrichment?.animatedTallUrl,
             activeServerBaseURL: container?.serverState.activeServer?.baseURL
         ) else { return nil }
-        if isDataSaverEnabled && MotionArtworkCache.shared.cachedURL(for: url) == nil {
+        if (isDataSaverEnabled || isCellularRestricted) && MotionArtworkCache.shared.cachedURL(for: url) == nil {
             return nil
         }
         return url

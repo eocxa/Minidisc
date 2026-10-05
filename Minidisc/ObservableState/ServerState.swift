@@ -117,6 +117,9 @@ final class ServerState {
     /// Updated by NetworkMonitor. True when the connection is metered (cellular, hotspot).
     /// Default false — optimistic until the first NWPath update corrects it on launch (~100ms).
     var isExpensive: Bool = false
+    var isCellular: Bool {
+        physicalNetworkPathEvent.descriptor.isCellular
+    }
     /// Coherent path snapshot. Unlike `isOnline`, its generation also changes for a seamless
     /// Wi-Fi ↔ cellular handover where connectivity remains satisfied throughout.
     var networkPathEvent: NetworkPathEvent = .initial

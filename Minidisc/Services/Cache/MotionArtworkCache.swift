@@ -29,7 +29,11 @@ private nonisolated final class FirstFrameMemoryCache: @unchecked Sendable {
 
 private nonisolated final class PersistFlag: @unchecked Sendable {
     private let lock = NSLock()
-    private var value: Bool = true
+    private var value: Bool
+
+    init(initialValue: Bool = true) {
+        self.value = initialValue
+    }
 
     func get() -> Bool {
         lock.lock()
@@ -50,11 +54,22 @@ actor MotionArtworkCache {
     private let cacheDirectory: URL
     private var inFlightDownloads: [URL: Task<URL, Error>] = [:]
     nonisolated private static let firstFrames = FirstFrameMemoryCache()
-    private static let persistFlag = PersistFlag()
+    private static let persistFlag = PersistFlag(initialValue: true)
+    private static let cellularFlag = PersistFlag(initialValue: false)
 
     nonisolated var persistMotionArtworkEnabled: Bool {
         get { Self.persistFlag.get() }
         set { Self.persistFlag.set(newValue) }
+    }
+
+    nonisolated var isCellular: Bool {
+        get { Self.cellularFlag.get() }
+        set { Self.cellularFlag.set(newValue) }
+    }
+
+    nonisolated var isCellularRestricted: Bool {
+        let disabledOnCellular = UserDefaults.standard.bool(forKey: "minidisc_motion_artwork_cellular_disabled")
+        return disabledOnCellular && isCellular
     }
 
     init() {
@@ -130,7 +145,8 @@ actor MotionArtworkCache {
     }
 
     func loadOrDownload(for remoteURL: URL) async throws -> URL {
-        if UserDefaults.standard.bool(forKey: "minidisc_data_saver_enabled") {
+        let isDataSaver = UserDefaults.standard.bool(forKey: "minidisc_data_saver_enabled")
+        if isDataSaver || isCellularRestricted {
             if let local = cachedURL(for: remoteURL) {
                 _ = await extractFirstFrame(for: remoteURL)
                 return local

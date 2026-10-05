@@ -790,6 +790,7 @@ private struct LibraryIndexStorageSection: View {
 
 private struct PlaybackSettingsView: View {
     @Environment(\.appContainer) private var container
+    @AppStorage("minidisc_motion_artwork_cellular_disabled") private var disableMotionOnCellular = false
 
     var body: some View {
         Form {
@@ -828,6 +829,15 @@ private struct PlaybackSettingsView: View {
             } footer: {
                 Text("The server transcodes to the chosen tier for each network. Original streams your files untouched (lossless); a lighter tier saves cellular data and lowers decoding load. Applies to the next track.")
             }
+
+            Section {
+                Toggle("Only cached artwork on cellular", isOn: $disableMotionOnCellular)
+            } header: {
+                Text("Animated Artwork")
+            } footer: {
+                Text("When enabled, animated covers will not be downloaded over cellular networks. Only animations already saved in cache will play.")
+            }
+
             if let lyrics = container?.lyricsSettings {
                 LyricsSettingsSection(settings: lyrics)
             }
