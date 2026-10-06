@@ -640,9 +640,9 @@ actor NowLocalService {
         }
 
         // Retry with cleaned metadata if raw strings had common tags
-        let cleanAlbum = album.map { cleanMetadata($0) }
-        let cleanArtist = artist.map { cleanMetadata($0) }
-        let cleanTitle = title.map { cleanMetadata($0) }
+        let cleanAlbum = album.map { Self.cleanMetadata($0) }
+        let cleanArtist = artist.map { Self.cleanMetadata($0) }
+        let cleanTitle = title.map { Self.cleanMetadata($0) }
 
         if (cleanAlbum != album || cleanArtist != artist || cleanTitle != title) {
             let cleanKey = "\(cleanAlbum ?? "")_\(cleanArtist ?? "")_\(cleanTitle ?? "")"

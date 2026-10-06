@@ -1149,7 +1149,7 @@ nonisolated final class AVPlayerEngine: AudioEngine, @unchecked Sendable {
         linearGain > 1
     }
 
-    nonisolated static func requiresAudioTap(context: ReplayGainTapContext) -> Bool {
+    fileprivate nonisolated static func requiresAudioTap(context: ReplayGainTapContext) -> Bool {
         requiresReplayGainTap(linearGain: context.gain) || context.isEqualizerActive
     }
 
