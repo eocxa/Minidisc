@@ -212,7 +212,7 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
                     return exact
                 }
             }
-            let cleanAlb = Self.cleanMetadata(alb)
+            let cleanAlb = NowLocalService.cleanMetadata(alb)
             if cleanAlb != alb && !cleanAlb.isEmpty {
                 let cleanKey = "\(cleanAlb)_\(art)_"
                 let cleanOnlyKey = "\(cleanAlb)__"
