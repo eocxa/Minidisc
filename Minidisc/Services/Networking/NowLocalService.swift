@@ -212,22 +212,35 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
                     return exact
                 }
             }
+            let cleanAlb = Self.cleanMetadata(alb)
+            if cleanAlb != alb && !cleanAlb.isEmpty {
+                let cleanKey = "\(cleanAlb)_\(art)_"
+                let cleanOnlyKey = "\(cleanAlb)__"
+                if let cleanExact = cache[cleanKey] ?? cache[cleanOnlyKey] {
+                    if let valAlb = cleanExact.album, NowLocalService.albumsMatch(valAlb, alb) {
+                        return cleanExact
+                    }
+                }
+            }
+            let targetNorm = NowLocalService.normalizeAlbumString(alb)
+            guard !targetNorm.isEmpty else { return nil }
+
             if let prefixMatch = cache.first(where: { (k, v) in
                 let parts = k.split(separator: "_", omittingEmptySubsequences: false)
                 guard let kAlb = parts.first, !kAlb.isEmpty else { return false }
-                return NowLocalService.albumsMatch(String(kAlb), alb) &&
-                       ((k.hasSuffix("_") || k == "\(kAlb)__")) &&
-                       NowLocalService.albumsMatch(v.album, alb)
+                let normK = NowLocalService.normalizeAlbumString(String(kAlb))
+                return (normK == targetNorm || normK.contains(targetNorm) || targetNorm.contains(normK)) &&
+                       ((k.hasSuffix("_") || k == "\(kAlb)__"))
             })?.value {
                 return prefixMatch
             }
             // Check if any track from this exact album has animated artwork cached
             if let trackWithMotion = cache.first(where: { (k, v) in
+                guard v.animatedTallUrl != nil || v.animatedSquareUrl != nil else { return false }
                 let parts = k.split(separator: "_", omittingEmptySubsequences: false)
                 guard let kAlb = parts.first, !kAlb.isEmpty else { return false }
-                return NowLocalService.albumsMatch(String(kAlb), alb) &&
-                       (v.animatedTallUrl != nil || v.animatedSquareUrl != nil) &&
-                       NowLocalService.albumsMatch(v.album, alb)
+                let normK = NowLocalService.normalizeAlbumString(String(kAlb))
+                return (normK == targetNorm || normK.contains(targetNorm) || targetNorm.contains(normK))
             })?.value {
                 return stripLyrics(trackWithMotion)
             }
@@ -410,8 +423,7 @@ actor NowLocalService {
         return nil
     }
 
-    nonisolated static func cleanMetadata(_ string: String) -> String {
-        var result = string
+    private static let metadataCleaningRegexes: [NSRegularExpression] = {
         let patterns = [
             "\\s*\\(.*?remaster.*?\\)",
             "\\s*\\[.*?remaster.*?\\]",
@@ -437,10 +449,17 @@ actor NowLocalService {
             "\\s*\\(.*?ep\\b.*?\\)",
             "\\s*\\[.*?ep\\b.*?\\]"
         ]
-        for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
-                result = regex.stringByReplacingMatches(in: result, range: NSRange(result.startIndex..., in: result), withTemplate: "")
-            }
+        return patterns.compactMap { try? NSRegularExpression(pattern: $0, options: .caseInsensitive) }
+    }()
+
+    private static let nonAlphanumericRegex: NSRegularExpression? = {
+        try? NSRegularExpression(pattern: "[^a-z0-9\\s]", options: [])
+    }()
+
+    nonisolated static func cleanMetadata(_ string: String) -> String {
+        var result = string
+        for regex in metadataCleaningRegexes {
+            result = regex.stringByReplacingMatches(in: result, range: NSRange(result.startIndex..., in: result), withTemplate: "")
         }
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -448,7 +467,9 @@ actor NowLocalService {
     nonisolated static func normalizeAlbumString(_ s: String) -> String {
         var res = cleanMetadata(s).lowercased()
         res = res.folding(options: .diacriticInsensitive, locale: .current)
-        res = res.replacingOccurrences(of: "[^a-z0-9\\s]", with: "", options: .regularExpression)
+        if let regex = nonAlphanumericRegex {
+            res = regex.stringByReplacingMatches(in: res, range: NSRange(res.startIndex..., in: res), withTemplate: "")
+        }
         return res.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 

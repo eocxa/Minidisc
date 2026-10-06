@@ -73,7 +73,11 @@ struct SearchView: View {
                     artistName: album.artist
                 )
             } content: {
-                AlbumDetailView(album: album)
+                AlbumDetailView(
+                    album: album,
+                    coverArtId: album.coverArt,
+                    initialCoverImage: container?.artworkImageCache.cachedImage(for: album.coverArt ?? album.id)
+                )
             }
         }
         .navigationDestination(for: HomeDestination.self) { destination in
@@ -99,7 +103,8 @@ struct SearchView: View {
                         album: album,
                         zoomSourceId: album.id,
                         zoomNamespace: albumZoomNamespace,
-                        coverArtId: album.coverArt
+                        coverArtId: album.coverArt,
+                        initialCoverImage: container?.artworkImageCache.cachedImage(for: album.coverArt ?? album.id)
                     )
                 }
             case .albumById(let id, let name, _, let coverArtId):

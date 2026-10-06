@@ -32,7 +32,8 @@ struct AlbumDetailView: View {
         initialName = album.name
         initialArtistId = album.artistId
         initialArtistName = album.artist
-        self.coverArtId = coverArtId
+        let effectiveCoverId = coverArtId ?? album.coverArt ?? album.id
+        self.coverArtId = effectiveCoverId
         self.initialCoverImage = initialCoverImage
         let cid = "album:\(album.id)"
         let aid = album.id
@@ -44,10 +45,9 @@ struct AlbumDetailView: View {
         _dominantColor = State(initialValue: initialDominantColor)
         let initialEnrichment = NowLocalService.shared.cachedEnrichment(album: album.name, artist: album.artist)
             ?? NowLocalService.shared.cachedEnrichment(album: album.name, artist: nil)
-        let albClean = album.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if let initialEnrichment,
-           let enAlb = initialEnrichment.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-           !enAlb.isEmpty && !albClean.isEmpty && enAlb == albClean {
+           let enAlb = initialEnrichment.album,
+           NowLocalService.albumsMatch(enAlb, album.name) {
             _enrichment = State(initialValue: initialEnrichment)
             let hasCachedVideo = initialEnrichment.animatedTallUrl != nil || initialEnrichment.animatedSquareUrl != nil
             _isMotionVideoReady = State(initialValue: hasCachedVideo)
@@ -62,7 +62,8 @@ struct AlbumDetailView: View {
         self.initialName = albumName
         initialArtistId = nil
         initialArtistName = nil
-        self.coverArtId = coverArtId
+        let effectiveCoverId = coverArtId ?? albumId
+        self.coverArtId = effectiveCoverId
         self.initialCoverImage = initialCoverImage
         let cid = "album:\(albumId)"
         let aid = albumId
@@ -73,10 +74,9 @@ struct AlbumDetailView: View {
         self.mode = mode
         _dominantColor = State(initialValue: initialDominantColor)
         let initialEnrichment = NowLocalService.shared.cachedEnrichment(album: albumName, artist: nil)
-        let albClean = albumName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if let initialEnrichment,
-           let enAlb = initialEnrichment.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-           !enAlb.isEmpty && !albClean.isEmpty && enAlb == albClean {
+           let enAlb = initialEnrichment.album,
+           NowLocalService.albumsMatch(enAlb, albumName) {
             _enrichment = State(initialValue: initialEnrichment)
             let hasCachedVideo = initialEnrichment.animatedTallUrl != nil || initialEnrichment.animatedSquareUrl != nil
             _isMotionVideoReady = State(initialValue: hasCachedVideo)
@@ -104,10 +104,10 @@ struct AlbumDetailView: View {
     @Query private var downloadedAlbumTracks: [DownloadedTrack]
 
     private var effectiveEnrichment: NowLocalEnrichment? {
-        let album = (viewModel?.albumName ?? initialName).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let album = viewModel?.albumName ?? initialName
         if let enrichment {
-            if let enAlb = enrichment.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-               !enAlb.isEmpty && !album.isEmpty && enAlb != album {
+            if let enAlb = enrichment.album,
+               !enAlb.isEmpty && !album.isEmpty && !NowLocalService.albumsMatch(enAlb, album) {
                 // Ignore mismatched enrichment
             } else {
                 return enrichment
@@ -118,8 +118,8 @@ struct AlbumDetailView: View {
         let cached = NowLocalService.shared.cachedEnrichment(album: rawAlbum, artist: rawArtist)
             ?? NowLocalService.shared.cachedEnrichment(album: rawAlbum, artist: nil)
         if let cached,
-           let enAlb = cached.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-           !enAlb.isEmpty && !album.isEmpty && enAlb != album {
+           let enAlb = cached.album,
+           !enAlb.isEmpty && !album.isEmpty && !NowLocalService.albumsMatch(enAlb, album) {
             return nil
         }
         return cached
@@ -187,7 +187,8 @@ struct AlbumDetailView: View {
         viewModel == nil || (viewModel?.isLoading == true && viewModel?.songs.isEmpty == true)
     }
     private var palette: AlbumDetailPalette {
-        AlbumDetailPalette(dominantColor: dominantColor, appearance: colorScheme)
+        let color = dominantColor != .clear ? dominantColor : (colorExtractor.cachedColor(for: albumCoverId) ?? .clear)
+        return AlbumDetailPalette(dominantColor: color, appearance: colorScheme)
     }
     private var headerTextColor: Color { palette.contentColor }
     private var headerSecondaryColor: Color { palette.secondaryContentColor }
@@ -229,7 +230,7 @@ struct AlbumDetailView: View {
     }
 
     private var effectiveInitialImage: PlatformImage? {
-        initialCoverImage ?? artworkImageCache.cachedImage(for: coverArtId ?? albumId)
+        initialCoverImage ?? artworkImageCache.cachedImage(for: albumCoverId)
     }
 
     // MARK: - Song filtering
@@ -455,7 +456,7 @@ struct AlbumDetailView: View {
 
     private func handleCoverArtChanged(artId: String?) async {
         guard let artId else { return }
-        let cached = colorExtractor.dominantColor(for: artId, image: nil)
+        let cached = colorExtractor.dominantColor(for: artId, image: effectiveInitialImage)
         if cached != .clear {
             dominantColor = cached
             return
@@ -582,8 +583,8 @@ struct AlbumDetailView: View {
             .task(id: container?.serverState.isOnline) {
                 await handleServerOnlineChanged()
             }
-            .task(id: viewModel?.coverArtId) {
-                await handleCoverArtChanged(artId: viewModel?.coverArtId)
+            .task(id: albumCoverId) {
+                await handleCoverArtChanged(artId: albumCoverId)
             }
             .task(id: recommendationRequest) {
                 await handleRecommendationChanged(request: recommendationRequest)
@@ -638,7 +639,7 @@ struct AlbumDetailView: View {
     @ViewBuilder
     private func headerSection(hasAnimatedCover: Bool) -> some View {
         AlbumArtworkSection(
-            coverArtId: viewModel?.coverArtId ?? coverArtId ?? albumId,
+            coverArtId: albumCoverId,
             coverImage: effectiveInitialImage,
             albumName: viewModel?.albumName ?? initialName,
             animatedURL: resolvedAnimatedCoverURL,
@@ -655,8 +656,8 @@ struct AlbumDetailView: View {
 
         AlbumMetadataSection(
             albumName: viewModel?.albumName ?? initialName,
-            artistName: viewModel?.artistName,
-            artistId: viewModel?.artistId,
+            artistName: viewModel?.artistName ?? initialArtistName,
+            artistId: viewModel?.artistId ?? initialArtistId,
             year: viewModel?.year,
             genre: viewModel?.genre,
             isLoading: viewModel == nil,

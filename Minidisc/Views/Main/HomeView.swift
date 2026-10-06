@@ -172,7 +172,11 @@ struct HomeView: View {
         case .libraryDownloads:
             DownloadedView()
         case .album(let album):
-            AlbumDetailView(album: album)
+            AlbumDetailView(
+                album: album,
+                coverArtId: album.coverArt,
+                initialCoverImage: artworkImageCache.cachedImage(for: album.coverArt ?? album.id)
+            )
         case .artist(let artist):
             ArtistDetailView(artist: artist)
         case .playlist(let playlist):

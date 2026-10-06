@@ -19,7 +19,7 @@ struct SongQuickActions: ViewModifier {
                     } label: {
                         Image(systemName: "text.line.first.and.arrowtriangle.forward")
                     }
-                    .tint(.orange)
+                    .tint(.purple)
                     .accessibilityLabel("Play Next")
 
                     Button {
@@ -28,7 +28,7 @@ struct SongQuickActions: ViewModifier {
                     } label: {
                         Image(systemName: "text.append")
                     }
-                    .tint(.purple)
+                    .tint(.orange)
                     .accessibilityLabel("Add to Queue")
                 }
             }

@@ -24,7 +24,11 @@ struct AlbumCarouselCollectionView: View {
             LazyVGrid(columns: columns, alignment: .leading, spacing: MinidiscSpacing.l) {
                 ForEach(container?.visibleAlbums(albums) ?? []) { album in
                     NavigationLink {
-                        AlbumDetailView(album: album)
+                        AlbumDetailView(
+                            album: album,
+                            coverArtId: album.coverArt,
+                            initialCoverImage: container?.artworkImageCache.cachedImage(for: album.coverArt ?? album.id)
+                        )
                     } label: {
                         AlbumGridCell(album: album)
                     }

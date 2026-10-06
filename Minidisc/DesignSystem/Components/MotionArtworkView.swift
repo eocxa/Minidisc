@@ -172,7 +172,7 @@ private struct LoopingVideoPlayerRepresentable: UIViewRepresentable {
             let effectiveURL = MotionArtworkCache.shared.cachedURL(for: url) ?? url
             if let currentURL {
                 let currentEffective = MotionArtworkCache.shared.cachedURL(for: currentURL) ?? currentURL
-                if currentEffective == effectiveURL && player != nil {
+                if (currentEffective == effectiveURL || currentURL == url || currentURL.lastPathComponent == url.lastPathComponent) && player != nil {
                     self.currentURL = url
                     return
                 }

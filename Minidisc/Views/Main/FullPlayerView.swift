@@ -58,7 +58,7 @@ struct FullPlayerView: View {
     private var effectiveTrackEnrichment: NowLocalEnrichment? {
         let track = container?.playerState.currentTrack
         if let currentTrackEnrichment {
-            if track?.albumName == nil || currentTrackEnrichment.album == nil || NowLocalService.albumsMatch(currentTrackEnrichment.album, track?.albumName) {
+            if track?.albumName == nil || currentTrackEnrichment.album == nil || NowLocalService.albumsMatch(currentTrackEnrichment.album, track?.albumName) || (track?.albumId != nil && previousTrack?.albumId != nil && track?.albumId == previousTrack?.albumId) {
                 return currentTrackEnrichment
             }
         }
@@ -281,7 +281,11 @@ struct FullPlayerView: View {
                         }
                     }
 
-                    currentTrackEnrichment = cached
+                    if let cached {
+                        currentTrackEnrichment = cached
+                    } else if !sameAlbum {
+                        currentTrackEnrichment = nil
+                    }
 
                     var enrichment = await NowLocalService.shared.fetchEnrichment(
                         album: track.albumName,
@@ -371,7 +375,7 @@ struct FullPlayerView: View {
                     // If sameAlbum and track lookup lacked video, inherit from existing video!
                     if sameAlbum && (existingTall != nil || existingSquare != nil) {
                         if enrichment == nil {
-                            enrichment = cached
+                            enrichment = currentTrackEnrichment ?? cached
                         }
                         if let e = enrichment, e.animatedTallUrl == nil && e.animatedSquareUrl == nil {
                             enrichment = NowLocalEnrichment(
@@ -408,7 +412,13 @@ struct FullPlayerView: View {
                             enrichment,
                             forKeys: keysToStore
                         )
-                        withAnimation(.easeInOut(duration: 0.35)) {
+                        let motionChanged = (enrichment.animatedTallUrl != currentTrackEnrichment?.animatedTallUrl) ||
+                                            (enrichment.animatedSquareUrl != currentTrackEnrichment?.animatedSquareUrl)
+                        if motionChanged {
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                currentTrackEnrichment = enrichment
+                            }
+                        } else {
                             currentTrackEnrichment = enrichment
                         }
                     } else if !sameAlbum {
@@ -645,6 +655,7 @@ struct FullPlayerView: View {
                             }
                         }
                     )
+                    .id("playerMotion_\(animatedURL.absoluteString)")
                     .frame(
                         width: canvasWidth,
                         height: canvasHeight
