@@ -383,8 +383,12 @@ actor NowLocalService {
     }
 
     private var cache: [String: NowLocalEnrichment] = [:]
-    private var lyricsCache: [String: NowLocalLyricsResponse] = Self.loadLyricsFromDisk()
+    private var lyricsCache: [String: NowLocalLyricsResponse]
     private let logger = Logger(subsystem: "app.minidisc.nowlocal", category: "Enrichment")
+
+    init() {
+        self.lyricsCache = NowLocalService.loadLyricsFromDisk()
+    }
 
     func clearCache() {
         cache.removeAll()
