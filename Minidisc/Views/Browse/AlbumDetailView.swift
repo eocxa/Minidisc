@@ -100,6 +100,7 @@ struct AlbumDetailView: View {
     @State private var recommendedAlbums: [AlbumID3] = []
     @State private var enrichment: NowLocalEnrichment?
     @State private var isMotionVideoReady = false
+    @State private var selectedArtistTarget: ArtistID3? = nil
     @Query private var albumFavoriteMatches: [FavoriteRecord]
     @Query private var downloadedAlbumTracks: [DownloadedTrack]
 
@@ -310,13 +311,6 @@ struct AlbumDetailView: View {
 
         ScrollViewReader { proxy in
             List {
-                Color.clear
-                    .frame(height: 0)
-                    .listRowInsets(EdgeInsets())
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-                    .id("albumDetailTop")
-
                 VStack(spacing: 0) {
                     headerSection(hasAnimatedCover: hasAnimated)
 
@@ -334,9 +328,11 @@ struct AlbumDetailView: View {
                     .padding(.top, MinidiscSpacing.l)
                     .padding(.bottom, MinidiscSpacing.xl)
                 }
+                .frame(maxWidth: .infinity)
                 .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
+                .id("albumDetailTop")
 
                 if isLoadingSkeleton {
                     AlbumTrackSkeletonRows()
@@ -353,6 +349,9 @@ struct AlbumDetailView: View {
             .miniPlayerBottomMargin()
             .animation(.easeInOut(duration: 0.35), value: isMotionVideoReady)
             .minidiscHideTopScrollEdgeEffect()
+            .navigationDestination(item: $selectedArtistTarget) { artist in
+                ArtistDetailView(artist: artist)
+            }
             .onAppear {
                 proxy.scrollTo("albumDetailTop", anchor: .top)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -670,7 +669,13 @@ struct AlbumDetailView: View {
             isLoading: viewModel == nil,
             isOffline: viewModel?.isOffline == true,
             isLossless: effectiveEnrichment?.isLossless ?? false,
-            isAtmos: effectiveEnrichment?.isAtmos ?? false
+            isAtmos: effectiveEnrichment?.isAtmos ?? false,
+            onArtistTap: {
+                if let artistId = viewModel?.artistId ?? initialArtistId,
+                   let artistName = viewModel?.artistName ?? initialArtistName {
+                    selectedArtistTarget = ArtistID3(id: artistId, name: artistName)
+                }
+            }
         )
         .padding(.top, hasTallAnimatedCover ? MinidiscSpacing.s : MinidiscSpacing.xl)
         .zIndex(2)
@@ -971,6 +976,7 @@ struct AlbumMetadataSection: View {
     let isOffline: Bool
     var isLossless: Bool = false
     var isAtmos: Bool = false
+    var onArtistTap: (() -> Void)? = nil
 
     var body: some View {
         VStack(spacing: MinidiscSpacing.xs) {
@@ -982,8 +988,8 @@ struct AlbumMetadataSection: View {
             if isLoading {
                 SkeletonBlock(width: 140, height: 18, cornerRadius: 4)
             } else if let artistName {
-                if let artistId, !isOffline {
-                    NavigationLink(value: HomeDestination.artist(ArtistID3(id: artistId, name: artistName))) {
+                if let artistId, !isOffline, let onArtistTap {
+                    Button(action: onArtistTap) {
                         Text(artistName)
                             .font(.title3.weight(.medium))
                             .foregroundStyle(.secondary)
