@@ -360,14 +360,39 @@ actor NowLocalService {
     static let shared = NowLocalService()
     nonisolated private static let storage = EnrichmentCacheStorage()
 
+    private static var lyricsCacheFileURL: URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("nowlocal_lyrics_cache.json")
+    }
+
+    nonisolated private static func loadLyricsFromDisk() -> [String: NowLocalLyricsResponse] {
+        guard let url = lyricsCacheFileURL,
+              let data = try? Data(contentsOf: url),
+              let decoded = try? JSONDecoder().decode([String: NowLocalLyricsResponse].self, from: data) else {
+            return [:]
+        }
+        return decoded
+    }
+
+    nonisolated private static func saveLyricsToDisk(_ snapshot: [String: NowLocalLyricsResponse]) {
+        guard let url = lyricsCacheFileURL else { return }
+        Task.detached(priority: .background) {
+            if let data = try? JSONEncoder().encode(snapshot) {
+                try? data.write(to: url, options: [.atomic])
+            }
+        }
+    }
+
     private var cache: [String: NowLocalEnrichment] = [:]
-    private var lyricsCache: [String: NowLocalLyricsResponse] = [:]
+    private var lyricsCache: [String: NowLocalLyricsResponse] = Self.loadLyricsFromDisk()
     private let logger = Logger(subsystem: "app.minidisc.nowlocal", category: "Enrichment")
 
     func clearCache() {
         cache.removeAll()
         lyricsCache.removeAll()
         Self.storage.clearAll()
+        if let url = Self.lyricsCacheFileURL {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     nonisolated func clearCacheSync() {
@@ -766,6 +791,7 @@ actor NowLocalService {
             let decoder = JSONDecoder()
             let lyricsResponse = try decoder.decode(NowLocalLyricsResponse.self, from: data)
             lyricsCache[cacheKey] = lyricsResponse
+            Self.saveLyricsToDisk(lyricsCache)
             return lyricsResponse
         } catch {
             logger.debug("Lyrics lookup failed for \(url): \(error.localizedDescription)")

@@ -1398,6 +1398,174 @@ private nonisolated enum AlbumDownloadControlState: Equatable {
     }
 }
 
+// MARK: - Swipeable Album Song Row
+
+private struct SwipeableAlbumSongRow<Content: View>: View {
+    let song: DisplayableSong
+    let isLiveStream: Bool
+    @Binding var swipedSongId: String?
+    let onPlayNext: () -> Void
+    let onAddToQueue: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    @State private var dragOffset: CGFloat = 0
+    @State private var baseOffset: CGFloat = 0
+    @State private var isDraggingHorizontal: Bool = false
+    @State private var hasTriggeredFullSwipeHaptic: Bool = false
+
+    private let revealWidth: CGFloat = 144
+    private let fullSwipeThreshold: CGFloat = 180
+
+    var body: some View {
+        content()
+            .offset(x: dragOffset)
+            .overlay(alignment: .leading) {
+                if dragOffset > 0 {
+                    actionsOverlay
+                        .frame(width: max(0, dragOffset))
+                        .offset(x: -dragOffset)
+                }
+            }
+            .overlay {
+                if dragOffset > 0 {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            close()
+                        }
+                }
+            }
+            .clipped()
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 12)
+                    .onChanged { value in
+                        guard !isLiveStream else { return }
+                        let tx = value.translation.width
+                        let ty = value.translation.height
+
+                        if !isDraggingHorizontal {
+                            if abs(ty) > abs(tx) {
+                                return
+                            }
+                            if tx < 0 && baseOffset == 0 {
+                                return
+                            }
+                            isDraggingHorizontal = true
+                            if swipedSongId != song.id {
+                                swipedSongId = song.id
+                            }
+                        }
+
+                        guard isDraggingHorizontal else { return }
+                        let raw = baseOffset + tx
+                        dragOffset = max(0, raw)
+
+                        if dragOffset >= fullSwipeThreshold {
+                            if !hasTriggeredFullSwipeHaptic {
+                                HapticFeedback.light.trigger()
+                                hasTriggeredFullSwipeHaptic = true
+                            }
+                        } else {
+                            hasTriggeredFullSwipeHaptic = false
+                        }
+                    }
+                    .onEnded { value in
+                        guard !isLiveStream, isDraggingHorizontal else { return }
+                        isDraggingHorizontal = false
+                        hasTriggeredFullSwipeHaptic = false
+
+                        let finalOffset = dragOffset
+                        let velocity = value.velocity.width
+
+                        if finalOffset >= fullSwipeThreshold || (finalOffset > 72 && velocity > 500) {
+                            HapticFeedback.light.trigger()
+                            onPlayNext()
+                            baseOffset = 0
+                            swipedSongId = nil
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                dragOffset = 0
+                            }
+                        } else if finalOffset >= 72 || velocity > 300 {
+                            baseOffset = revealWidth
+                            swipedSongId = song.id
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                dragOffset = revealWidth
+                            }
+                        } else {
+                            baseOffset = 0
+                            if swipedSongId == song.id {
+                                swipedSongId = nil
+                            }
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                dragOffset = 0
+                            }
+                        }
+                    }
+            )
+            .onChange(of: swipedSongId) { _, newId in
+                if newId != song.id && (dragOffset > 0 || baseOffset > 0) {
+                    baseOffset = 0
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        dragOffset = 0
+                    }
+                }
+            }
+    }
+
+    private func close() {
+        baseOffset = 0
+        if swipedSongId == song.id {
+            swipedSongId = nil
+        }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            dragOffset = 0
+        }
+    }
+
+    @ViewBuilder
+    private var actionsOverlay: some View {
+        let total = max(0, dragOffset)
+        let button2Width: CGFloat = min(72, total / 2)
+        let button1Width: CGFloat = max(0, total - button2Width)
+
+        HStack(spacing: 0) {
+            Button {
+                HapticFeedback.light.trigger()
+                onPlayNext()
+                close()
+            } label: {
+                ZStack {
+                    Color.purple
+                    Image(systemName: "text.line.first.and.arrowtriangle.forward")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .buttonStyle(.plain)
+            .frame(width: button1Width)
+            .clipped()
+            .accessibilityLabel("Play Next")
+
+            Button {
+                HapticFeedback.light.trigger()
+                onAddToQueue()
+                close()
+            } label: {
+                ZStack {
+                    Color.orange
+                    Image(systemName: "text.append")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .buttonStyle(.plain)
+            .frame(width: button2Width)
+            .clipped()
+            .accessibilityLabel("Add to Queue")
+        }
+    }
+}
+
 // MARK: - Live download indicator rows
 
 struct AlbumSongRows: View {
@@ -1411,8 +1579,10 @@ struct AlbumSongRows: View {
     let onRemoveDownload: ((String) -> Void)?
     let onAddToPlaylist: ((DisplayableSong) -> Void)?
 
+    @Environment(\.appContainer) private var container
     @Query private var downloadedTracks: [DownloadedTrack]
     @Query private var allFavorites: [FavoriteRecord]
+    @State private var swipedSongId: String? = nil
 
     private var favoriteSongIds: Set<String> {
         Set(allFavorites.map(\.id))
@@ -1449,9 +1619,21 @@ struct AlbumSongRows: View {
             let downloadAction: (() -> Void)? = (liveDownloaded || isDownloading) ? nil : onDownload.map { action in { action(song.id) } }
             let removeAction: (() -> Void)? = liveDownloaded ? onRemoveDownload.map { action in { action(song.id) } } : nil
             VStack(spacing: 0) {
-                SongRow(song: liveSong, index: index + 1, showArtist: showArtists, isFavorite: favoriteSongIds.contains("song:\(song.id)"), titleColor: titleColor, secondaryColor: secondaryColor, trailingAccessory: .menu, onDownload: downloadAction, onRemoveDownload: removeAction, isDownloading: isDownloading, onAddToPlaylist: onAddToPlaylist, onTap: { onTap(index) })
-                    .padding(.vertical, MinidiscSpacing.xs)
-                    .padding(.horizontal, MinidiscSpacing.l)
+                SwipeableAlbumSongRow(
+                    song: liveSong,
+                    isLiveStream: container?.playerState.isLiveStream == true,
+                    swipedSongId: $swipedSongId,
+                    onPlayNext: {
+                        Task { await container?.playerService.playNext(liveSong) }
+                    },
+                    onAddToQueue: {
+                        Task { await container?.playerService.addToQueue(liveSong) }
+                    }
+                ) {
+                    SongRow(song: liveSong, index: index + 1, showArtist: showArtists, isFavorite: favoriteSongIds.contains("song:\(song.id)"), titleColor: titleColor, secondaryColor: secondaryColor, trailingAccessory: .menu, onDownload: downloadAction, onRemoveDownload: removeAction, isDownloading: isDownloading, onAddToPlaylist: onAddToPlaylist, onTap: { onTap(index) })
+                        .padding(.vertical, MinidiscSpacing.xs)
+                        .padding(.horizontal, MinidiscSpacing.l)
+                }
                 if index < songs.count - 1 {
                     Divider()
                         .overlay(titleColor.opacity(0.22))

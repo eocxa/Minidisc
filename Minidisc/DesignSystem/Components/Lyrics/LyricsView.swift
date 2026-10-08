@@ -46,6 +46,7 @@ struct LyricsView: View {
                     currentIndex: viewModel.currentLineIndex,
                     isSynced: isSynced,
                     isTappable: isSynced && line.start != nil,
+                    isUserScrolling: viewModel.isUserScrolling,
                     onTap: { viewModel.userTapped(lineIndex: index) }
                 )
                 .id(index)
@@ -74,7 +75,7 @@ struct LyricsView: View {
                     try? await Task.sleep(for: .milliseconds(60))
                     guard !Task.isCancelled, !viewModel.isUserScrolling else { return }
                     if let currentIndex = viewModel.currentLineIndex {
-                        withAnimation(.easeInOut(duration: 0.3)) {
+                        withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
                             proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height, containerWidth: contentWidth, lines: structured.line))
                         }
                     }
@@ -83,7 +84,7 @@ struct LyricsView: View {
                     guard viewModel.autoScrollEnabled,
                           !viewModel.isUserScrolling,
                           let newIndex else { return }
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
                         proxy.scrollTo(newIndex, anchor: lyricsAnchor(for: newIndex, in: geo.size.height, containerWidth: contentWidth, lines: structured.line))
                     }
                 }
@@ -91,7 +92,7 @@ struct LyricsView: View {
                     guard viewModel.autoScrollEnabled,
                           !isScrolling,
                           let currentIndex = viewModel.currentLineIndex else { return }
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
                         proxy.scrollTo(currentIndex, anchor: lyricsAnchor(for: currentIndex, in: geo.size.height, containerWidth: contentWidth, lines: structured.line))
                     }
                 }

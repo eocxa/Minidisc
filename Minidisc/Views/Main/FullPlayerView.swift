@@ -1317,9 +1317,9 @@ private struct ScrubberView: View {
                 isLossless: isLossless,
                 isAtmos: isAtmos
             )
-            .padding(.top, -2)
+            .padding(.top, 4)
         }
-        .padding(.bottom, 12)
+        .padding(.bottom, 6)
     }
 }
 
