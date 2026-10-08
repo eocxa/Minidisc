@@ -309,12 +309,15 @@ struct AlbumDetailView: View {
         let songs = displaySongs()
 
         ScrollViewReader { proxy in
-            ScrollView {
+            List {
                 Color.clear
                     .frame(height: 0)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                     .id("albumDetailTop")
 
-                LazyVStack(spacing: 0) {
+                VStack(spacing: 0) {
                     headerSection(hasAnimatedCover: hasAnimated)
 
                     AlbumPlaybackActions(
@@ -330,14 +333,19 @@ struct AlbumDetailView: View {
                     )
                     .padding(.top, MinidiscSpacing.l)
                     .padding(.bottom, MinidiscSpacing.xl)
+                }
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
 
-                    if isLoadingSkeleton {
-                        AlbumTrackSkeletonRows()
-                    } else if let vm = viewModel {
-                        trackListContent(songs: songs, vm: vm)
-                    }
+                if isLoadingSkeleton {
+                    AlbumTrackSkeletonRows()
+                } else if let vm = viewModel {
+                    trackListContent(songs: songs, vm: vm)
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .defaultScrollAnchor(.top)
             .ignoresSafeArea(.container, edges: topScrollEdges)
             .toolbarBackground(.hidden, for: .navigationBar)
@@ -345,7 +353,6 @@ struct AlbumDetailView: View {
             .miniPlayerBottomMargin()
             .animation(.easeInOut(duration: 0.35), value: isMotionVideoReady)
             .minidiscHideTopScrollEdgeEffect()
-            .minidiscSongSwipeContainer()
             .onAppear {
                 proxy.scrollTo("albumDetailTop", anchor: .top)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -679,6 +686,8 @@ struct AlbumDetailView: View {
                     title: "No Downloaded Tracks",
                     subtitle: "No tracks from this album have been downloaded."
                 )
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
             } else if let error = vm.error {
                 EmptyStateView(
                     systemImage: "exclamationmark.triangle",
@@ -686,12 +695,16 @@ struct AlbumDetailView: View {
                     subtitle: LocalizedStringKey(error.displayMessage),
                     action: .init(label: "Retry") { Task { await vm.load() } }
                 )
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
             } else {
                 EmptyStateView(
                     systemImage: "music.note",
                     title: "No Tracks",
                     subtitle: "This album doesn't have any tracks yet."
                 )
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
             }
         } else {
             AlbumSongRows(
@@ -734,6 +747,9 @@ struct AlbumDetailView: View {
                 audioFormats: songs.compactMap(\.audioFormat),
                 textColor: headerSecondaryColor
             )
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
 
             if case .full = mode, !vm.isOffline {
                 if let artistId = vm.artistId,
@@ -744,9 +760,15 @@ struct AlbumDetailView: View {
                         artistName: artistName,
                         currentAlbumId: albumId
                     )
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                 }
 
                 AlbumYouMightAlsoLikeSection(albums: visibleRecommendedAlbums)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
             }
         }
     }
@@ -1352,6 +1374,9 @@ private struct AlbumTrackSkeletonRows: View {
             }
             .padding(.vertical, MinidiscSpacing.s)
             .padding(.horizontal, MinidiscSpacing.l)
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
         }
     }
 }
@@ -1414,7 +1439,6 @@ struct AlbumSongRows: View {
     @Environment(\.appContainer) private var container
     @Query private var downloadedTracks: [DownloadedTrack]
     @Query private var allFavorites: [FavoriteRecord]
-    @State private var swipedSongId: String? = nil
 
     private var favoriteSongIds: Set<String> {
         Set(allFavorites.map(\.id))
@@ -1450,42 +1474,27 @@ struct AlbumSongRows: View {
             let isDownloading = downloadingIds.contains(song.id)
             let downloadAction: (() -> Void)? = (liveDownloaded || isDownloading) ? nil : onDownload.map { action in { action(song.id) } }
             let removeAction: (() -> Void)? = liveDownloaded ? onRemoveDownload.map { action in { action(song.id) } } : nil
-            VStack(spacing: 0) {
-                SwipeableSongRow(
-                    song: liveSong,
-                    isLiveStream: container?.playerState.isLiveStream == true,
-                    swipedSongId: $swipedSongId,
-                    onPlayNext: {
-                        Task { await container?.playerService.playNext(liveSong) }
-                    },
-                    onAddToQueue: {
-                        Task { await container?.playerService.addToQueue(liveSong) }
-                    },
-                    onTap: { onTap(index) }
-                ) {
-                    SongRow(
-                        song: liveSong,
-                        index: index + 1,
-                        showArtist: showArtists,
-                        isFavorite: favoriteSongIds.contains("song:\(song.id)"),
-                        titleColor: titleColor,
-                        secondaryColor: secondaryColor,
-                        trailingAccessory: .menu,
-                        onDownload: downloadAction,
-                        onRemoveDownload: removeAction,
-                        isDownloading: isDownloading,
-                        onAddToPlaylist: onAddToPlaylist,
-                        onTap: nil
-                    )
-                    .padding(.vertical, MinidiscSpacing.xs)
-                    .padding(.horizontal, MinidiscSpacing.l)
-                }
-                if index < songs.count - 1 {
-                    Divider()
-                        .overlay(titleColor.opacity(0.22))
-                        .padding(.leading, MinidiscSpacing.l + 36)
-                }
+            SongRow(
+                song: liveSong,
+                index: index + 1,
+                showArtist: showArtists,
+                isFavorite: favoriteSongIds.contains("song:\(song.id)"),
+                titleColor: titleColor,
+                secondaryColor: secondaryColor,
+                trailingAccessory: .menu,
+                menuAccessibilityIdentifier: "album.song.menu.\(song.id)",
+                onDownload: downloadAction,
+                onRemoveDownload: removeAction,
+                isDownloading: isDownloading,
+                onAddToPlaylist: onAddToPlaylist,
+                onTap: { onTap(index) }
+            )
+            .listRowInsets(EdgeInsets(top: 5, leading: MinidiscSpacing.l, bottom: 5, trailing: MinidiscSpacing.s))
+            .alignmentGuide(.listRowSeparatorLeading) { dimensions in
+                dimensions[.listRowSeparatorLeading]
             }
+            .listRowSeparatorTint(secondaryColor.opacity(0.22))
+            .listRowBackground(Color.clear)
         }
     }
 }
