@@ -988,7 +988,7 @@ struct AlbumMetadataSection: View {
             if isLoading {
                 SkeletonBlock(width: 140, height: 18, cornerRadius: 4)
             } else if let artistName {
-                if let artistId, !isOffline, let onArtistTap {
+                if artistId != nil, !isOffline, let onArtistTap {
                     Button(action: onArtistTap) {
                         Text(artistName)
                             .font(.title3.weight(.medium))
