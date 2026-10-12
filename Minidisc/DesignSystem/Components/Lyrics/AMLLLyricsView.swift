@@ -1,10 +1,22 @@
 import SwiftUI
 import WebKit
 import OSLog
+import SwiftSonic
 
 enum AMLLLyricsPayload: Equatable {
     case ttml(NowLocalLyricsResponse)
     case structured(StructuredLyrics)
+
+    static func == (lhs: AMLLLyricsPayload, rhs: AMLLLyricsPayload) -> Bool {
+        switch (lhs, rhs) {
+        case (.ttml(let a), .ttml(let b)):
+            return a == b
+        case (.structured(let a), .structured(let b)):
+            return a == b
+        default:
+            return false
+        }
+    }
 }
 
 struct AMLLLyricsView: View {
