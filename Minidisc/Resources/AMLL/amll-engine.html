@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>AMLL Engine</title>
+  <link rel="stylesheet" href="amll.css">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: transparent !important;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+      color: #ffffff;
+    }
+    #lyrics-viewport {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: transparent !important;
+    }
+    #lyrics-viewport .amll-lyric-player {
+      position: absolute !important;
+      inset: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      background: transparent !important;
+      --amll-lp-font-size: clamp(28px, 4.2vw, 44px);
+      --amll-lp-line-padding-x: clamp(20px, 3.5vw, 48px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .amll-lyric-player .FmKaba_lyricMainLine {
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div id="lyrics-viewport"></div>
+
+  <script src="amll-bundle.iife.js"></script>
+  <script>
+    (function() {
+      const container = document.getElementById('lyrics-viewport');
+      let player = null;
+      let lastFrameTime = performance.now();
+      let isPlayingAudio = false;
+
+      // 1. Inicializar el motor oficial LyricPlayer de AMLL
+      try {
+        if (window.AMLLCore && window.AMLLCore.LyricPlayer) {
+          player = new window.AMLLCore.LyricPlayer();
+          player.getElement().classList.add('dom');
+          container.appendChild(player.getElement());
+
+          // Escuchar clics interactivos en cualquier verso para saltar en Minidisc
+          player.addEventListener('line-click', function(e) {
+            try {
+              const lines = player.getLyricLines();
+              if (lines && lines[e.lineIndex]) {
+                const targetSec = lines[e.lineIndex].startTime / 1000;
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.onSeek) {
+                  window.webkit.messageHandlers.onSeek.postMessage(targetSec);
+                }
+              }
+            } catch (err) {
+              console.warn('[AMLL] Error en line-click:', err);
+            }
+          });
+          console.log('[AMLL] LyricPlayer inicializado exitosamente');
+        } else {
+          console.error('[AMLL] No se encontró window.AMLLCore.LyricPlayer');
+        }
+      } catch (e) {
+        console.error('[AMLL] Excepción inicializando:', e);
+      }
+
+      // 2. Bucle continuo de renderizado a 60 / 120 FPS (Física de resortes y shaders)
+      function animLoop(now) {
+        const delta = now - lastFrameTime;
+        lastFrameTime = now;
+        if (player) {
+          player.update(delta);
+        }
+        requestAnimationFrame(animLoop);
+      }
+      requestAnimationFrame(animLoop);
+
+      // Convertidores auxiliares para estructuras nativas de Minidisc
+      function convertNowLocalToAMLL(lyrics) {
+        if (!Array.isArray(lyrics)) return [];
+        const result = [];
+        for (let i = 0; i < lyrics.length; i++) {
+          const l = lyrics[i];
+          const isV2 = l.agent === 'v2';
+          const mainWords = (l.main && l.main.words && l.main.words.length > 0) ? l.main.words : (l.words && l.words.length > 0 ? l.words : null);
+          const nextTime = (i + 1 < lyrics.length) ? lyrics[i + 1].time : (l.time + 3.0);
+          const lineEndSec = l.endTime != null ? l.endTime : nextTime;
+
+          let words = [];
+          if (mainWords && mainWords.length > 0) {
+            words = mainWords.map(w => ({
+              word: w.text,
+              startTime: Math.round(w.time * 1000),
+              endTime: Math.round((w.endTime != null ? w.endTime : (w.time + 0.35)) * 1000)
+            }));
+          } else {
+            const lineText = (l.main && l.main.text) || l.text || '';
+            words = [{
+              word: lineText,
+              startTime: Math.round(l.time * 1000),
+              endTime: Math.round(lineEndSec * 1000)
+            }];
+          }
+
+          result.push({
+            words: words,
+            startTime: Math.round(l.time * 1000),
+            endTime: Math.round(lineEndSec * 1000),
+            isDuet: isV2,
+            isBG: false
+          });
+
+          if (l.hasAdlib && l.adlib) {
+            const adlibWords = (l.adlib.words && l.adlib.words.length > 0) ? l.adlib.words : null;
+            let adWords = [];
+            const adStart = (l.adlib.time != null ? l.adlib.time : l.time);
+            const adEnd = (l.adlib.endTime != null ? l.adlib.endTime : lineEndSec);
+            if (adlibWords && adlibWords.length > 0) {
+              adWords = adlibWords.map(w => ({
+                word: w.text,
+                startTime: Math.round(w.time * 1000),
+                endTime: Math.round((w.endTime != null ? w.endTime : (w.time + 0.35)) * 1000)
+              }));
+            } else {
+              adWords = [{
+                word: l.adlib.text || '',
+                startTime: Math.round(adStart * 1000),
+                endTime: Math.round(adEnd * 1000)
+              }];
+            }
+            result.push({
+              words: adWords,
+              startTime: Math.round(adStart * 1000),
+              endTime: Math.round(adEnd * 1000),
+              isDuet: isV2,
+              isBG: true
+            });
+          }
+        }
+        return result;
+      }
+
+      function convertStructuredLinesToAMLL(lines) {
+        if (!Array.isArray(lines)) return [];
+        const result = [];
+        for (let i = 0; i < lines.length; i++) {
+          const l = lines[i];
+          const startMs = l.start != null ? l.start : 0;
+          const nextStartMs = (i + 1 < lines.length && lines[i + 1].start != null) ? lines[i + 1].start : (startMs + 3000);
+          result.push({
+            words: [{
+              word: l.value || '',
+              startTime: startMs,
+              endTime: nextStartMs
+            }],
+            startTime: startMs,
+            endTime: nextStartMs,
+            isDuet: false,
+            isBG: false
+          });
+        }
+        return result;
+      }
+
+      // 3. API Global expuesta a Swift / WKWebView
+      window.amllSetTime = function(timeMs, isPlaying, forceSeek) {
+        if (!player) return;
+        isPlayingAudio = !!isPlaying;
+        player.setCurrentTime(timeMs, !!forceSeek);
+        if (isPlayingAudio) {
+          player.resume();
+        } else {
+          player.pause();
+        }
+      };
+
+      window.amllLoadLyrics = function(content, format) {
+        if (!player || !content) return;
+        try {
+          let lines = [];
+          const fmt = (format || 'auto').toLowerCase();
+
+          if (fmt === 'ttml' || (fmt === 'auto' && typeof content === 'string' && content.includes('<tt'))) {
+            if (window.AMLLLyric && window.AMLLLyric.parseTTML) {
+              const parsed = window.AMLLLyric.parseTTML(content);
+              lines = parsed.lines || [];
+            }
+          } else if (fmt === 'lrc' || (fmt === 'auto' && typeof content === 'string' && content.includes('['))) {
+            if (window.AMLLLyric && window.AMLLLyric.parseLrc) {
+              lines = window.AMLLLyric.parseLrc(content) || [];
+            }
+          } else if (fmt === 'nowlocal' || (typeof content === 'object' && Array.isArray(content.lyrics))) {
+            const raw = typeof content === 'string' ? JSON.parse(content) : content;
+            if (raw.raw_ttml && window.AMLLLyric && window.AMLLLyric.parseTTML) {
+              const parsed = window.AMLLLyric.parseTTML(raw.raw_ttml);
+              lines = parsed.lines || [];
+            } else if (raw.raw_lrc && window.AMLLLyric && window.AMLLLyric.parseLrc) {
+              lines = window.AMLLLyric.parseLrc(raw.raw_lrc) || [];
+            } else if (Array.isArray(raw.lyrics)) {
+              lines = convertNowLocalToAMLL(raw.lyrics);
+            }
+          } else if (fmt === 'structured') {
+            const rawLines = typeof content === 'string' ? JSON.parse(content) : content;
+            lines = convertStructuredLinesToAMLL(rawLines);
+          } else if (fmt === 'json' || Array.isArray(content)) {
+            lines = typeof content === 'string' ? JSON.parse(content) : content;
+          }
+
+          if (Array.isArray(lines) && lines.length > 0) {
+            player.setLyricLines(lines);
+            console.log('[AMLL] Letras cargadas:', lines.length, 'líneas');
+          } else {
+            console.warn('[AMLL] No se obtuvieron líneas válidas.');
+          }
+        } catch (err) {
+          console.error('[AMLL] Error parseando letras:', err);
+        }
+      };
+
+      window.amllSetFontSize = function(sizePx) {
+        if (!container) return;
+        container.style.setProperty('--amll-lp-font-size', sizePx + 'px');
+      };
+
+      window.amllClear = function() {
+        if (player) {
+          player.setLyricLines([]);
+        }
+      };
+
+      // Notificar a Swift que el motor web está listo
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.onReady) {
+        window.webkit.messageHandlers.onReady.postMessage('ready');
+      }
+    })();
+  </script>
+</body>
+</html>

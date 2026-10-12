@@ -81,12 +81,16 @@ nonisolated struct NowLocalLyricsResponse: Sendable, Codable, Equatable {
     let lyricsType: String?
     let hasWordSync: Bool?
     let composer: String?
+    let rawTTML: String?
+    let rawLRC: String?
 
     enum CodingKeys: String, CodingKey {
         case lyrics
         case lyricsType = "lyrics_type"
         case hasWordSync = "has_word_sync"
         case composer
+        case rawTTML = "raw_ttml"
+        case rawLRC = "raw_lrc"
     }
 }
 

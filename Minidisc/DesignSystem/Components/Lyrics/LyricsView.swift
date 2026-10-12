@@ -13,10 +13,10 @@ struct LyricsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             case .loadedTTML(let ttml):
-                TTMLLyricsView(viewModel: viewModel, lyricsResponse: ttml, areControlsHidden: areControlsHidden)
+                AMLLLyricsView(viewModel: viewModel, payload: .ttml(ttml), areControlsHidden: areControlsHidden)
 
             case .loaded(let structured):
-                loadedContent(structured)
+                AMLLLyricsView(viewModel: viewModel, payload: .structured(structured), areControlsHidden: areControlsHidden)
 
             case .empty:
                 emptyState
