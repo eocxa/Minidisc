@@ -172,17 +172,7 @@ private struct AMLLWebViewRepresentable: UIViewRepresentable {
 
             switch payload {
             case .ttml(let ttml):
-                // 1. Si tenemos el TTML original sin procesar, es la máxima prioridad
-                if let rawTTML = ttml.rawTTML, !rawTTML.isEmpty {
-                    sendRawLyrics(to: webView, content: rawTTML, format: "ttml")
-                    return
-                }
-                // 2. Si tenemos el LRC original
-                if let rawLRC = ttml.rawLRC, !rawLRC.isEmpty {
-                    sendRawLyrics(to: webView, content: rawLRC, format: "lrc")
-                    return
-                }
-                // 3. Fallback: enviar la estructura codificada en JSON
+                // Enviar la estructura NowLocalLyricsResponse codificada en JSON para garantizar soporte palabra por palabra
                 do {
                     let encoder = JSONEncoder()
                     let data = try encoder.encode(ttml)
@@ -215,15 +205,6 @@ private struct AMLLWebViewRepresentable: UIViewRepresentable {
                     logger.error("Error codificando StructuredLyrics: \(error.localizedDescription)")
                 }
             }
-        }
-
-        private func sendRawLyrics(to webView: WKWebView, content: String, format: String) {
-            let escaped = content
-                .replacingOccurrences(of: "\\", with: "\\\\")
-                .replacingOccurrences(of: "`", with: "\\`")
-                .replacingOccurrences(of: "$", with: "\\$")
-            let js = "window.amllLoadLyrics(`\(escaped)`, '\(format)');"
-            webView.evaluateJavaScript(js, completionHandler: nil)
         }
     }
 }

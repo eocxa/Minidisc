@@ -36,8 +36,8 @@
       width: 100% !important;
       height: 100% !important;
       background: transparent !important;
-      --amll-lp-font-size: clamp(28px, 4.2vw, 44px);
-      --amll-lp-line-padding-x: clamp(20px, 3.5vw, 48px);
+      --amll-lp-font-size: clamp(34px, 4.8vw, 48px);
+      --amll-lp-line-padding-x: clamp(20px, 3.5vw, 40px);
       font-weight: 700;
       letter-spacing: -0.02em;
     }
@@ -63,6 +63,12 @@
           player = new window.AMLLCore.LyricPlayer();
           player.getElement().classList.add('dom');
           container.appendChild(player.getElement());
+
+          // Posicionamiento superior: verso actual arriba mostrando solo el último renglón del verso previo
+          player.setAlignAnchor('top');
+          player.setAlignPosition(0.14);
+          player.setEnableBlur(true);
+          player.setAlwaysPostpositionBackground(false);
 
           // Escuchar clics interactivos en cualquier verso para saltar en Minidisc
           player.addEventListener('line-click', function(e) {
@@ -103,10 +109,21 @@
         const result = [];
         for (let i = 0; i < lyrics.length; i++) {
           const l = lyrics[i];
+          if (l.text === '…' || l.text === '...') continue;
+
           const isV2 = l.agent === 'v2';
           const mainWords = (l.main && l.main.words && l.main.words.length > 0) ? l.main.words : (l.words && l.words.length > 0 ? l.words : null);
           const nextTime = (i + 1 < lyrics.length) ? lyrics[i + 1].time : (l.time + 3.0);
-          const lineEndSec = l.endTime != null ? l.endTime : nextTime;
+
+          let maxMainWordEnd = 0;
+          if (mainWords && mainWords.length > 0) {
+            for (let w of mainWords) {
+              const we = w.endTime != null ? w.endTime : (w.time + 0.35);
+              if (we > maxMainWordEnd) maxMainWordEnd = we;
+            }
+          }
+          let mainEndTime = (l.endTime != null && l.endTime > l.time) ? l.endTime : ((maxMainWordEnd > l.time) ? maxMainWordEnd : nextTime);
+          if (maxMainWordEnd > mainEndTime) mainEndTime = maxMainWordEnd;
 
           let words = [];
           if (mainWords && mainWords.length > 0) {
@@ -120,23 +137,32 @@
             words = [{
               word: lineText,
               startTime: Math.round(l.time * 1000),
-              endTime: Math.round(lineEndSec * 1000)
+              endTime: Math.round(mainEndTime * 1000)
             }];
           }
 
           result.push({
             words: words,
             startTime: Math.round(l.time * 1000),
-            endTime: Math.round(lineEndSec * 1000),
+            endTime: Math.round(mainEndTime * 1000),
             isDuet: isV2,
             isBG: false
           });
 
           if (l.hasAdlib && l.adlib) {
             const adlibWords = (l.adlib.words && l.adlib.words.length > 0) ? l.adlib.words : null;
-            let adWords = [];
             const adStart = (l.adlib.time != null ? l.adlib.time : l.time);
-            const adEnd = (l.adlib.endTime != null ? l.adlib.endTime : lineEndSec);
+            let maxAdWordEnd = 0;
+            if (adlibWords && adlibWords.length > 0) {
+              for (let w of adlibWords) {
+                const we = w.endTime != null ? w.endTime : (w.time + 0.35);
+                if (we > maxAdWordEnd) maxAdWordEnd = we;
+              }
+            }
+            let adEnd = (l.adlib.endTime != null && l.adlib.endTime > adStart) ? l.adlib.endTime : ((maxAdWordEnd > adStart) ? maxAdWordEnd : mainEndTime);
+            if (maxAdWordEnd > adEnd) adEnd = maxAdWordEnd;
+
+            let adWords = [];
             if (adlibWords && adlibWords.length > 0) {
               adWords = adlibWords.map(w => ({
                 word: w.text,
@@ -150,6 +176,7 @@
                 endTime: Math.round(adEnd * 1000)
               }];
             }
+
             result.push({
               words: adWords,
               startTime: Math.round(adStart * 1000),
@@ -202,7 +229,17 @@
           let lines = [];
           const fmt = (format || 'auto').toLowerCase();
 
-          if (fmt === 'ttml' || (fmt === 'auto' && typeof content === 'string' && content.includes('<tt'))) {
+          if (fmt === 'nowlocal' || (typeof content === 'object' && Array.isArray(content.lyrics))) {
+            const raw = typeof content === 'string' ? JSON.parse(content) : content;
+            if (Array.isArray(raw.lyrics) && raw.lyrics.length > 0) {
+              lines = convertNowLocalToAMLL(raw.lyrics);
+            } else if (raw.raw_ttml && window.AMLLLyric && window.AMLLLyric.parseTTML) {
+              const parsed = window.AMLLLyric.parseTTML(raw.raw_ttml);
+              lines = parsed.lines || [];
+            } else if (raw.raw_lrc && window.AMLLLyric && window.AMLLLyric.parseLrc) {
+              lines = window.AMLLLyric.parseLrc(raw.raw_lrc) || [];
+            }
+          } else if (fmt === 'ttml' || (fmt === 'auto' && typeof content === 'string' && content.includes('<tt'))) {
             if (window.AMLLLyric && window.AMLLLyric.parseTTML) {
               const parsed = window.AMLLLyric.parseTTML(content);
               lines = parsed.lines || [];
@@ -210,16 +247,6 @@
           } else if (fmt === 'lrc' || (fmt === 'auto' && typeof content === 'string' && content.includes('['))) {
             if (window.AMLLLyric && window.AMLLLyric.parseLrc) {
               lines = window.AMLLLyric.parseLrc(content) || [];
-            }
-          } else if (fmt === 'nowlocal' || (typeof content === 'object' && Array.isArray(content.lyrics))) {
-            const raw = typeof content === 'string' ? JSON.parse(content) : content;
-            if (raw.raw_ttml && window.AMLLLyric && window.AMLLLyric.parseTTML) {
-              const parsed = window.AMLLLyric.parseTTML(raw.raw_ttml);
-              lines = parsed.lines || [];
-            } else if (raw.raw_lrc && window.AMLLLyric && window.AMLLLyric.parseLrc) {
-              lines = window.AMLLLyric.parseLrc(raw.raw_lrc) || [];
-            } else if (Array.isArray(raw.lyrics)) {
-              lines = convertNowLocalToAMLL(raw.lyrics);
             }
           } else if (fmt === 'structured') {
             const rawLines = typeof content === 'string' ? JSON.parse(content) : content;
