@@ -31,6 +31,7 @@ struct AMLLLyricsView: View {
                 currentTimeMs: Int(currentTimeSec * 1000),
                 isPlaying: viewModel.isPlaying,
                 payload: payload,
+                areControlsHidden: areControlsHidden,
                 onSeek: { seconds in
                     viewModel.userTapped(seconds: seconds)
                 }
@@ -43,6 +44,7 @@ private struct AMLLWebViewRepresentable: UIViewRepresentable {
     let currentTimeMs: Int
     let isPlaying: Bool
     let payload: AMLLLyricsPayload
+    let areControlsHidden: Bool
     let onSeek: (Double) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -100,7 +102,8 @@ private struct AMLLWebViewRepresentable: UIViewRepresentable {
             webView: uiView,
             currentTimeMs: currentTimeMs,
             isPlaying: isPlaying,
-            payload: payload
+            payload: payload,
+            areControlsHidden: areControlsHidden
         )
     }
 
@@ -112,6 +115,7 @@ private struct AMLLWebViewRepresentable: UIViewRepresentable {
         private var lastLoadedPayload: AMLLLyricsPayload?
         private var lastPushedTimeMs: Int = -1
         private var lastPushedIsPlaying: Bool?
+        private var lastPushedControlsHidden: Bool?
         private let logger = Logger(subsystem: "app.minidisc.amll", category: "Engine")
 
         init(onSeek: @escaping (Double) -> Void) {
@@ -143,7 +147,8 @@ private struct AMLLWebViewRepresentable: UIViewRepresentable {
             webView: WKWebView,
             currentTimeMs: Int,
             isPlaying: Bool,
-            payload: AMLLLyricsPayload
+            payload: AMLLLyricsPayload,
+            areControlsHidden: Bool
         ) {
             if lastLoadedPayload != payload {
                 lastLoadedPayload = payload
@@ -153,6 +158,12 @@ private struct AMLLWebViewRepresentable: UIViewRepresentable {
             }
 
             guard isEngineReady else { return }
+
+            if lastPushedControlsHidden != areControlsHidden {
+                lastPushedControlsHidden = areControlsHidden
+                let js = "window.amllSetControlsHidden(\(areControlsHidden ? "true" : "false"));"
+                webView.evaluateJavaScript(js, completionHandler: nil)
+            }
 
             let timeDiff = abs(currentTimeMs - lastPushedTimeMs)
             let isPlayingChanged = lastPushedIsPlaying != isPlaying

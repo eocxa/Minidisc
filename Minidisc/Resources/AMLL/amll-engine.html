@@ -73,9 +73,16 @@
           // Escuchar clics interactivos en cualquier verso para saltar en Minidisc
           player.addEventListener('line-click', function(e) {
             try {
-              const lines = player.getLyricLines();
-              if (lines && lines[e.lineIndex]) {
-                const targetSec = lines[e.lineIndex].startTime / 1000;
+              let targetSec = null;
+              if (e.line && typeof e.line.getLine === 'function') {
+                targetSec = e.line.getLine().startTime / 1000;
+              } else {
+                const lines = player.getLyricLines();
+                if (lines && lines[e.lineIndex]) {
+                  targetSec = lines[e.lineIndex].startTime / 1000;
+                }
+              }
+              if (targetSec != null && Number.isFinite(targetSec)) {
                 if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.onSeek) {
                   window.webkit.messageHandlers.onSeek.postMessage(targetSec);
                 }
@@ -91,6 +98,50 @@
       } catch (e) {
         console.error('[AMLL] Excepción inicializando:', e);
       }
+
+      // Desactivar foco y persistencia de hover al soltar el dedo en pantallas táctiles
+      document.addEventListener('touchend', function() {
+        if (document.activeElement && document.activeElement !== document.body) {
+          document.activeElement.blur();
+        }
+      }, { passive: true });
+      document.addEventListener('touchcancel', function() {
+        if (document.activeElement && document.activeElement !== document.body) {
+          document.activeElement.blur();
+        }
+      }, { passive: true });
+
+      // Calibración de anclaje de altura para mantener verso constante con o sin controles
+      let isControlsHidden = false;
+      let controlsVisibleHeight = 0;
+
+      function updateAlignment() {
+        if (!player || !container) return;
+        const h = container.clientHeight || window.innerHeight;
+        if (!h || h <= 0) return;
+
+        if (!isControlsHidden) {
+          controlsVisibleHeight = h;
+          player.setAlignPosition(0.14);
+        } else {
+          const baseH = (controlsVisibleHeight > 0) ? controlsVisibleHeight : Math.max(100, h - 270);
+          const targetPx = baseH * 0.14;
+          const ratio = Math.max(0.01, Math.min(0.20, targetPx / h));
+          player.setAlignPosition(ratio);
+        }
+        if (typeof player.calcLayout === 'function') {
+          player.calcLayout('config-change');
+        }
+      }
+
+      window.amllSetControlsHidden = function(hidden) {
+        isControlsHidden = !!hidden;
+        updateAlignment();
+      };
+
+      window.addEventListener('resize', function() {
+        updateAlignment();
+      });
 
       // 2. Bucle continuo de renderizado a 60 / 120 FPS (Física de resortes y shaders)
       function animLoop(now) {
@@ -149,9 +200,18 @@
             isBG: false
           });
 
-          if (l.hasAdlib && l.adlib) {
+          const hasAdlib = (l.has_adlib === true || l.hasAdlib === true || !!l.adlib);
+          if (hasAdlib && l.adlib) {
             const adlibWords = (l.adlib.words && l.adlib.words.length > 0) ? l.adlib.words : null;
-            const adStart = (l.adlib.time != null ? l.adlib.time : l.time);
+            const isAdlibBefore = (l.adlib_is_before !== undefined) ? !!l.adlib_is_before : ((l.adlibIsBefore !== undefined) ? !!l.adlibIsBefore : ((l.adlib.time != null && l.time != null) ? (l.adlib.time < l.time) : false));
+
+            let adStart = (l.adlib.time != null ? l.adlib.time : l.time);
+            if (isAdlibBefore && adStart >= l.time) {
+              adStart = Math.max(0, l.time - 0.05);
+            } else if (!isAdlibBefore && adStart <= l.time) {
+              adStart = l.time + 0.05;
+            }
+
             let maxAdWordEnd = 0;
             if (adlibWords && adlibWords.length > 0) {
               for (let w of adlibWords) {

@@ -243,7 +243,11 @@ final class LyricsViewModel {
         lastPositionUpdateTime = Date()
         update(elapsedMs: Int(seconds * 1000))
         Task { [weak self] in
-            await self?.playerService.seek(to: seconds)
+            guard let self else { return }
+            await self.playerService.seek(to: seconds)
+            if !self.isPlaying {
+                await self.playerService.resume()
+            }
         }
     }
 
