@@ -194,15 +194,53 @@
         if (!bottomEl || !bottomEl.innerHTML) return;
 
         const lines = player.getLyricLines();
+        if (!lines || lines.length === 0) return;
+
         const curTime = player.getCurrentTime();
         const isTouchScrolled = !!(player.scrollState && player.scrollState.isTouchScrolled);
 
-        const lastLine = (lines && lines.length > 0) ? lines[lines.length - 1] : null;
-        const isNearEnd = lastLine ? (curTime >= (lastLine.startTime - 2500)) : false;
+        let currentIndex = 0;
+        if (player.timelineController) {
+          const snapshot = player.timelineController.getSnapshot();
+          if (snapshot) {
+            currentIndex = snapshot.latestHighlightedIndex !== undefined ? snapshot.latestHighlightedIndex : (snapshot.scrollToIndex || 0);
+          }
+        }
 
-        const blurRadius = (isTouchScrolled || isNearEnd) ? 0 : 5.0;
-        bottomEl.style.filter = blurRadius > 0 ? ('blur(' + blurRadius + 'px)') : 'none';
-        bottomEl.style.opacity = (isTouchScrolled || isNearEnd) ? '0.85' : '0.45';
+        const lastIndex = lines.length - 1;
+        const lastLine = lines[lastIndex];
+        const isAtLastLine = (currentIndex >= lastIndex) || (lastLine && lastLine.startTime != null && curTime >= (lastLine.startTime - 300));
+        const dist = isAtLastLine ? 0 : Math.max(0, lastIndex - currentIndex);
+
+        let blurRadius = 0;
+        let opacity = 0.85;
+
+        if (isTouchScrolled || dist === 0) {
+          // Requisito: Cuando llegue el último verso o mientras el usuario hace scroll,
+          // lo de Written By ya NO debe estar difuminado.
+          blurRadius = 0;
+          opacity = 0.85;
+        } else if (dist === 1) {
+          // Penúltimo verso: difuminado progresivo ligero
+          blurRadius = 1.6;
+          opacity = 0.65;
+        } else if (dist === 2) {
+          blurRadius = 3.2;
+          opacity = 0.50;
+        } else {
+          // Versos distantes: difuminado progresivo estándar
+          blurRadius = 5.0;
+          opacity = 0.35;
+        }
+
+        const filterVal = blurRadius > 0 ? ('blur(' + blurRadius + 'px)') : 'none';
+        if (bottomEl.style.filter !== filterVal) {
+          bottomEl.style.filter = filterVal;
+        }
+        const opStr = String(opacity);
+        if (bottomEl.style.opacity !== opStr) {
+          bottomEl.style.opacity = opStr;
+        }
       }
 
       // 2. Bucle continuo de renderizado a 60 / 120 FPS (Física de resortes y shaders)
