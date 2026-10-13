@@ -143,12 +143,47 @@
         updateAlignment();
       });
 
+      function updateAdlibsVisibility() {
+        if (!player || !player.currentLyricGroups) return;
+        const curTime = player.getCurrentTime();
+        const isTouchScrolled = !!(player.scrollState && player.scrollState.isTouchScrolled);
+
+        for (let i = 0; i < player.currentLyricGroups.length; i++) {
+          const group = player.currentLyricGroups[i];
+          if (!group || !group.bgWrapper) continue;
+
+          let bgEndTime = 0;
+          try {
+            if (group.bgLine) {
+              const bgLineData = group.bgLine.getLine();
+              if (bgLineData) {
+                const words = bgLineData.words;
+                bgEndTime = (words && words.length > 0) ? words[words.length - 1].endTime : (bgLineData.endTime || 0);
+              }
+            }
+          } catch (_) {}
+
+          const shouldShow = group.isActive && !isTouchScrolled && (bgEndTime > 0 ? (curTime <= bgEndTime + 150) : true);
+
+          if (shouldShow) {
+            group.bgWrapper.style.opacity = '0.85';
+            group.bgWrapper.style.visibility = 'visible';
+            group.bgWrapper.style.pointerEvents = 'auto';
+          } else {
+            group.bgWrapper.style.opacity = '0';
+            group.bgWrapper.style.visibility = 'hidden';
+            group.bgWrapper.style.pointerEvents = 'none';
+          }
+        }
+      }
+
       // 2. Bucle continuo de renderizado a 60 / 120 FPS (Física de resortes y shaders)
       function animLoop(now) {
         const delta = now - lastFrameTime;
         lastFrameTime = now;
         if (player) {
           player.update(delta);
+          updateAdlibsVisibility();
         }
         requestAnimationFrame(animLoop);
       }
