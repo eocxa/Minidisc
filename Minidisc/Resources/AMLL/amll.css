@@ -14,4 +14,62 @@
   min-width: 100% !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  padding-top: 28px !important;
+  padding-bottom: 60px !important;
+  text-align: left !important;
+  pointer-events: none !important;
+  transition: opacity 0.45s ease, filter 0.45s ease !important;
 }
+
+/* Reducción estricta de la distancia entre adlib y verso principal (2px) */
+.amll-lyric-player .FmKaba_lyricLineWrapper {
+  gap: 2px !important;
+}
+
+.amll-lyric-player .FmKaba_lyricBgLine {
+  font-size: max(calc(1em * var(--amll-lp-bg-line-scale, .60)), 14px) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.amll-lyric-player .FmKaba_lyricBgLine .FmKaba_lyricMainLine {
+  padding: 2px 0 !important;
+  margin: 0 !important;
+  line-height: 1.25 !important;
+}
+
+.amll-lyric-player .FmKaba_bgWrapper {
+  margin-top: 2px !important;
+  margin-bottom: 2px !important;
+}
+
+.amll-lyric-player .FmKaba_bgWrapperTop {
+  margin-top: 0 !important;
+  margin-bottom: 3px !important;
+}
+
+/* Créditos de compositores al final de las letras (referencia Commit 0b58c73) */
+.amll-composer-container {
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: baseline !important;
+  gap: 6px !important;
+  text-align: left !important;
+}
+
+.amll-composer-label {
+  color: rgba(255, 255, 255, 0.45) !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+}
+
+.amll-composer-names {
+  color: rgba(255, 255, 255, 0.75) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
