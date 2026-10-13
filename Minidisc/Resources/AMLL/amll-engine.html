@@ -69,6 +69,7 @@
           player.setAlignPosition(0.14);
           player.setEnableBlur(true);
           player.setAlwaysPostpositionBackground(false);
+          player.updateLyricProcessConfig({ optimizeOptions: { resetLineTimestamps: false } });
 
           // Escuchar clics interactivos en cualquier verso para saltar en Minidisc
           player.addEventListener('line-click', function(e) {
@@ -152,18 +153,10 @@
           const group = player.currentLyricGroups[i];
           if (!group || !group.bgWrapper) continue;
 
-          let bgEndTime = 0;
-          try {
-            if (group.bgLine) {
-              const bgLineData = group.bgLine.getLine();
-              if (bgLineData) {
-                const words = bgLineData.words;
-                bgEndTime = (words && words.length > 0) ? words[words.length - 1].endTime : (bgLineData.endTime || 0);
-              }
-            }
-          } catch (_) {}
-
-          const shouldShow = group.isActive && !isTouchScrolled && (bgEndTime > 0 ? (curTime <= bgEndTime + 150) : true);
+          // Requisito: Si el adlib termina pero el verso no, el adlib debe esperarse
+          // hasta que el verso al que está atado termine, para que cuando el principal
+          // suba, el adlib desaparezca, ambos a la vez.
+          const shouldShow = group.isActive && !isTouchScrolled;
 
           if (shouldShow) {
             if (!group.bgWrapper.classList.contains('amll-adlib-active')) {
@@ -245,8 +238,9 @@
               if (we > maxMainWordEnd) maxMainWordEnd = we;
             }
           }
-          let mainEndTime = (l.endTime != null && l.endTime > l.time) ? l.endTime : ((maxMainWordEnd > l.time) ? maxMainWordEnd : nextTime);
-          if (maxMainWordEnd > mainEndTime) mainEndTime = maxMainWordEnd;
+          let naturalEndTime = (l.endTime != null && l.endTime > l.time) ? l.endTime : ((maxMainWordEnd > l.time) ? maxMainWordEnd : nextTime);
+          if (maxMainWordEnd > naturalEndTime) naturalEndTime = maxMainWordEnd;
+          let mainEndTime = naturalEndTime;
           if (isLast) {
             // El último verso debe permanecer iluminado hasta que termine la canción, o sea que no debe subir
             mainEndTime = Math.max(mainEndTime, l.time + 3600.0);
@@ -264,7 +258,7 @@
             words = [{
               word: lineText,
               startTime: Math.round(l.time * 1000),
-              endTime: Math.round(mainEndTime * 1000)
+              endTime: Math.round(naturalEndTime * 1000)
             }];
           }
 
@@ -330,8 +324,10 @@
         const result = [];
         for (let i = 0; i < lines.length; i++) {
           const l = lines[i];
+          const isLast = (i === lines.length - 1);
           const startMs = l.start != null ? l.start : 0;
           const nextStartMs = (i + 1 < lines.length && lines[i + 1].start != null) ? lines[i + 1].start : (startMs + 3000);
+          const lineEndMs = isLast ? (startMs + 3600000) : nextStartMs;
           result.push({
             words: [{
               word: l.value || '',
@@ -339,7 +335,7 @@
               endTime: nextStartMs
             }],
             startTime: startMs,
-            endTime: nextStartMs,
+            endTime: lineEndMs,
             isDuet: false,
             isBG: false
           });
@@ -417,6 +413,10 @@
                 lines[k].endTime = Math.max(lines[k].endTime || 0, sTime + 3600000);
                 break;
               }
+            }
+            if (lines.length > 0) {
+              const lastLine = lines[lines.length - 1];
+              lastLine.endTime = Math.max(lastLine.endTime || 0, (lastLine.startTime || 0) + 3600000);
             }
 
             player.setLyricLines(lines);
