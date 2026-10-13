@@ -166,13 +166,31 @@
           const shouldShow = group.isActive && !isTouchScrolled && (bgEndTime > 0 ? (curTime <= bgEndTime + 150) : true);
 
           if (shouldShow) {
+            if (!group.bgWrapper.classList.contains('amll-adlib-active')) {
+              group.bgWrapper.classList.add('amll-adlib-active');
+              group.bgWrapper.classList.remove('amll-adlib-hidden');
+            }
             group.bgWrapper.style.opacity = '0.85';
             group.bgWrapper.style.visibility = 'visible';
             group.bgWrapper.style.pointerEvents = 'auto';
+            group.bgWrapper.style.display = 'flex';
+            group.bgWrapper.style.position = 'relative';
+            group.bgWrapper.style.maxHeight = '120px';
+            group.bgWrapper.style.height = 'auto';
           } else {
+            if (!group.bgWrapper.classList.contains('amll-adlib-hidden')) {
+              group.bgWrapper.classList.remove('amll-adlib-active');
+              group.bgWrapper.classList.add('amll-adlib-hidden');
+            }
             group.bgWrapper.style.opacity = '0';
             group.bgWrapper.style.visibility = 'hidden';
             group.bgWrapper.style.pointerEvents = 'none';
+            group.bgWrapper.style.display = 'none';
+            group.bgWrapper.style.position = 'absolute';
+            group.bgWrapper.style.maxHeight = '0px';
+            group.bgWrapper.style.height = '0px';
+            group.bgWrapper.style.margin = '0px';
+            group.bgWrapper.style.padding = '0px';
           }
         }
       }
@@ -215,6 +233,7 @@
           const l = lyrics[i];
           if (l.text === '…' || l.text === '...') continue;
 
+          const isLast = (i === lyrics.length - 1);
           const isV2 = l.agent === 'v2';
           const mainWords = (l.main && l.main.words && l.main.words.length > 0) ? l.main.words : (l.words && l.words.length > 0 ? l.words : null);
           const nextTime = (i + 1 < lyrics.length) ? lyrics[i + 1].time : (l.time + 3.0);
@@ -228,6 +247,10 @@
           }
           let mainEndTime = (l.endTime != null && l.endTime > l.time) ? l.endTime : ((maxMainWordEnd > l.time) ? maxMainWordEnd : nextTime);
           if (maxMainWordEnd > mainEndTime) mainEndTime = maxMainWordEnd;
+          if (isLast) {
+            // El último verso debe permanecer iluminado hasta que termine la canción, o sea que no debe subir
+            mainEndTime = Math.max(mainEndTime, l.time + 3600.0);
+          }
 
           let words = [];
           if (mainWords && mainWords.length > 0) {
@@ -353,13 +376,16 @@
           if (fmt === 'nowlocal' || (typeof content === 'object' && Array.isArray(content.lyrics))) {
             const raw = typeof content === 'string' ? JSON.parse(content) : content;
             if (raw.composer && typeof raw.composer === 'string') {
-              composer = raw.composer.trim();
+              composer = raw.composer.replace(/[\r\n]+/g, ', ').replace(/\s{2,}/g, ' ').trim();
             }
             if (Array.isArray(raw.lyrics) && raw.lyrics.length > 0) {
               lines = convertNowLocalToAMLL(raw.lyrics);
             } else if (raw.raw_ttml && window.AMLLLyric && window.AMLLLyric.parseTTML) {
               const parsed = window.AMLLLyric.parseTTML(raw.raw_ttml);
               lines = parsed.lines || [];
+              if (!composer && parsed && parsed.metadata && Array.isArray(parsed.metadata.songwriters) && parsed.metadata.songwriters.length > 0) {
+                composer = parsed.metadata.songwriters.join(', ');
+              }
             } else if (raw.raw_lrc && window.AMLLLyric && window.AMLLLyric.parseLrc) {
               lines = window.AMLLLyric.parseLrc(raw.raw_lrc) || [];
             }
@@ -367,6 +393,9 @@
             if (window.AMLLLyric && window.AMLLLyric.parseTTML) {
               const parsed = window.AMLLLyric.parseTTML(content);
               lines = parsed.lines || [];
+              if (!composer && parsed && parsed.metadata && Array.isArray(parsed.metadata.songwriters) && parsed.metadata.songwriters.length > 0) {
+                composer = parsed.metadata.songwriters.join(', ');
+              }
             }
           } else if (fmt === 'lrc' || (fmt === 'auto' && typeof content === 'string' && content.includes('['))) {
             if (window.AMLLLyric && window.AMLLLyric.parseLrc) {
@@ -380,6 +409,16 @@
           }
 
           if (Array.isArray(lines) && lines.length > 0) {
+            // Requisito: Cuando termina el último verso, ese último debe permanecer iluminado
+            // hasta que termine la canción, o sea que no debe subir ni perder iluminación.
+            for (let k = lines.length - 1; k >= 0; k--) {
+              if (!lines[k].isBG) {
+                const sTime = lines[k].startTime || 0;
+                lines[k].endTime = Math.max(lines[k].endTime || 0, sTime + 3600000);
+                break;
+              }
+            }
+
             player.setLyricLines(lines);
 
             // Mostrar compositores hasta abajo (Referencia Commit 0b58c73)
