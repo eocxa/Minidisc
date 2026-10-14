@@ -137,6 +137,32 @@ private struct QueueRow: View {
             }
             .disabled(!isOnline || song.isLocalFile)
 
+            Divider()
+
+            if song.albumId != nil || (song.albumName != nil && !song.albumName!.isEmpty) {
+                Button {
+                    navigateToAlbum(track: song, container: container)
+                } label: {
+                    Label("Go to Album", systemImage: "music.note.square.stack")
+                    if let albumName = song.albumName, !albumName.isEmpty {
+                        Text(albumName)
+                    }
+                }
+                .disabled(!isOnline && !song.isDownloaded && !song.isLocalFile)
+            }
+
+            if song.artistId != nil || (song.artist != nil && !song.artist!.isEmpty) {
+                Button {
+                    navigateToArtist(track: song, container: container)
+                } label: {
+                    Label("Go to Artist", systemImage: "music.mic")
+                    if let artist = song.artist, !artist.isEmpty {
+                        Text(artist)
+                    }
+                }
+                .disabled(!isOnline && !song.isDownloaded && !song.isLocalFile)
+            }
+
             if let onRemove {
                 Divider()
                 Button(role: .destructive, action: onRemove) {

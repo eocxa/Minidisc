@@ -15,6 +15,44 @@ func postNavigateToAlbum(track: DisplayableSong) {
     )
 }
 
+@MainActor
+func navigateToAlbum(track: DisplayableSong, container: AppContainer?) {
+    if track.albumId != nil {
+        postNavigateToAlbum(track: track)
+        return
+    }
+    guard let name = track.albumName, !name.isEmpty else { return }
+    Task {
+        guard let c = container,
+              let result = try? await c.libraryService.search(name),
+              let found = result.album?.first else { return }
+        NotificationCenter.default.post(
+            name: .minidiscNavigateToAlbum,
+            object: nil,
+            userInfo: [
+                "albumId":   found.id,
+                "albumName": found.name,
+                "coverArtId": found.coverArt as Any
+            ]
+        )
+    }
+}
+
+@MainActor
+func navigateToArtist(track: DisplayableSong, container: AppContainer?) {
+    if track.artistId != nil {
+        postNavigateToArtist(track: track)
+        return
+    }
+    guard let name = track.artist, !name.isEmpty else { return }
+    Task {
+        guard let c = container,
+              let result = try? await c.libraryService.search(name),
+              let found = result.artist?.first else { return }
+        postNavigateToArtist(artistId: found.id, artistName: found.name, coverArtId: found.coverArt)
+    }
+}
+
 func postNavigateToArtist(track: DisplayableSong) {
     guard let artistId = track.artistId else { return }
     postNavigateToArtist(artistId: artistId, artistName: track.artist ?? "", coverArtId: track.coverArtId)

@@ -130,16 +130,13 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
         }
         var sanitized: [String: NowLocalEnrichment] = [:]
         for (k, v) in decoded {
-            guard let valAlb = v.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !valAlb.isEmpty else {
-                continue
-            }
             let keyParts = k.lowercased().split(separator: "_", omittingEmptySubsequences: false)
-            if let keyAlb = keyParts.first, !keyAlb.isEmpty {
-                if keyAlb != valAlb {
-                    continue
+            if let valAlb = v.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !valAlb.isEmpty {
+                if let keyAlb = keyParts.first, !keyAlb.isEmpty {
+                    if keyAlb != valAlb && !NowLocalService.albumsMatch(String(keyAlb), valAlb) {
+                        continue
+                    }
                 }
-            } else {
-                continue
             }
             if k.hasSuffix("_") && v.lyricsUrl != nil {
                 sanitized[k] = NowLocalEnrichment(
@@ -211,24 +208,61 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
 
         func findAlbumEnrichment() -> NowLocalEnrichment? {
             guard !alb.isEmpty else { return nil }
+
+            // 1. Direct key match with motion artwork
             if let exact = cache[albumKey] ?? cache[albumOnlyKey] {
-                if let valAlb = exact.album, NowLocalService.albumsMatch(valAlb, alb) {
-                    return exact
+                if exact.album == nil || exact.album?.isEmpty == true || NowLocalService.albumsMatch(exact.album, alb) {
+                    if exact.animatedTallUrl != nil || exact.animatedSquareUrl != nil {
+                        return exact
+                    }
                 }
             }
+
+            // 2. Clean metadata key match with motion artwork
             let cleanAlb = NowLocalService.cleanMetadata(alb)
             if cleanAlb != alb && !cleanAlb.isEmpty {
                 let cleanKey = "\(cleanAlb)_\(art)_"
                 let cleanOnlyKey = "\(cleanAlb)__"
                 if let cleanExact = cache[cleanKey] ?? cache[cleanOnlyKey] {
-                    if let valAlb = cleanExact.album, NowLocalService.albumsMatch(valAlb, alb) {
+                    if cleanExact.album == nil || cleanExact.album?.isEmpty == true || NowLocalService.albumsMatch(cleanExact.album, alb) {
+                        if cleanExact.animatedTallUrl != nil || cleanExact.animatedSquareUrl != nil {
+                            return cleanExact
+                        }
+                    }
+                }
+            }
+
+            let targetNorm = NowLocalService.normalizeAlbumString(alb)
+            guard !targetNorm.isEmpty else {
+                return cache[albumKey] ?? cache[albumOnlyKey]
+            }
+
+            // 3. Scan cache for any entry for this album that has motion artwork (prefer motion artwork!)
+            if let motionMatch = cache.first(where: { (k, v) in
+                guard v.animatedTallUrl != nil || v.animatedSquareUrl != nil else { return false }
+                let parts = k.split(separator: "_", omittingEmptySubsequences: false)
+                guard let kAlb = parts.first, !kAlb.isEmpty else { return false }
+                let normK = NowLocalService.normalizeAlbumString(String(kAlb))
+                return normK == targetNorm || normK.contains(targetNorm) || targetNorm.contains(normK)
+            })?.value {
+                return stripLyrics(motionMatch)
+            }
+
+            // 4. Fallback to exact match even without motion artwork
+            if let exact = cache[albumKey] ?? cache[albumOnlyKey] {
+                if exact.album == nil || exact.album?.isEmpty == true || NowLocalService.albumsMatch(exact.album, alb) {
+                    return exact
+                }
+            }
+            if cleanAlb != alb && !cleanAlb.isEmpty {
+                if let cleanExact = cache["\(cleanAlb)_\(art)_"] ?? cache["\(cleanAlb)__"] {
+                    if cleanExact.album == nil || cleanExact.album?.isEmpty == true || NowLocalService.albumsMatch(cleanExact.album, alb) {
                         return cleanExact
                     }
                 }
             }
-            let targetNorm = NowLocalService.normalizeAlbumString(alb)
-            guard !targetNorm.isEmpty else { return nil }
 
+            // 5. Fallback to any prefix match
             if let prefixMatch = cache.first(where: { (k, v) in
                 let parts = k.split(separator: "_", omittingEmptySubsequences: false)
                 guard let kAlb = parts.first, !kAlb.isEmpty else { return false }
@@ -237,16 +271,6 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
                        ((k.hasSuffix("_") || k == "\(kAlb)__"))
             })?.value {
                 return prefixMatch
-            }
-            // Check if any track from this exact album has animated artwork cached
-            if let trackWithMotion = cache.first(where: { (k, v) in
-                guard v.animatedTallUrl != nil || v.animatedSquareUrl != nil else { return false }
-                let parts = k.split(separator: "_", omittingEmptySubsequences: false)
-                guard let kAlb = parts.first, !kAlb.isEmpty else { return false }
-                let normK = NowLocalService.normalizeAlbumString(String(kAlb))
-                return (normK == targetNorm || normK.contains(targetNorm) || targetNorm.contains(normK))
-            })?.value {
-                return stripLyrics(trackWithMotion)
             }
             return nil
         }
@@ -302,17 +326,20 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
 
             if k.hasSuffix("_") {
                 // Strip song-specific lyrics from album-wide keys so they never leak to other tracks
+                let existing = cache[keyLower]
+                let effectiveTall = enrichment.animatedTallUrl ?? existing?.animatedTallUrl
+                let effectiveSquare = enrichment.animatedSquareUrl ?? existing?.animatedSquareUrl
                 let albumLevel = NowLocalEnrichment(
-                    found: enrichment.found,
+                    found: enrichment.found || (existing?.found ?? false),
                     trackId: nil,
                     title: nil,
-                    artist: enrichment.artist,
-                    album: enrichment.album,
-                    hasAnimatedArtwork: enrichment.hasAnimatedArtwork,
-                    animatedSquareUrl: enrichment.animatedSquareUrl,
-                    animatedTallUrl: enrichment.animatedTallUrl,
-                    isAtmos: enrichment.isAtmos,
-                    isLossless: enrichment.isLossless,
+                    artist: enrichment.artist ?? existing?.artist,
+                    album: enrichment.album ?? existing?.album,
+                    hasAnimatedArtwork: (effectiveTall != nil || effectiveSquare != nil) || (enrichment.hasAnimatedArtwork == true),
+                    animatedSquareUrl: effectiveSquare,
+                    animatedTallUrl: effectiveTall,
+                    isAtmos: enrichment.isAtmos ?? existing?.isAtmos,
+                    isLossless: enrichment.isLossless ?? existing?.isLossless,
                     lyricsUrl: nil,
                     lyricsType: nil
                 )
@@ -330,25 +357,35 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
                     if !targetAlb.isEmpty {
                         let albKey = "\(targetAlb)_\(enArt)_"
                         let albOnlyKey = "\(targetAlb)__"
+                        let existing = cache[albKey] ?? cache[albOnlyKey]
+                        let effectiveTall = enrichment.animatedTallUrl ?? existing?.animatedTallUrl
+                        let effectiveSquare = enrichment.animatedSquareUrl ?? existing?.animatedSquareUrl
                         let albumLevel = NowLocalEnrichment(
                             found: enrichment.found,
                             trackId: nil,
                             title: nil,
-                            artist: enrichment.artist,
-                            album: enrichment.album,
+                            artist: enrichment.artist ?? existing?.artist,
+                            album: enrichment.album ?? existing?.album,
                             hasAnimatedArtwork: true,
-                            animatedSquareUrl: enrichment.animatedSquareUrl,
-                            animatedTallUrl: enrichment.animatedTallUrl,
-                            isAtmos: enrichment.isAtmos,
-                            isLossless: enrichment.isLossless,
+                            animatedSquareUrl: effectiveSquare,
+                            animatedTallUrl: effectiveTall,
+                            isAtmos: enrichment.isAtmos ?? existing?.isAtmos,
+                            isLossless: enrichment.isLossless ?? existing?.isLossless,
                             lyricsUrl: nil,
                             lyricsType: nil
                         )
-                        if cache[albKey] == nil || (cache[albKey]?.animatedTallUrl == nil && cache[albKey]?.animatedSquareUrl == nil) {
-                            cache[albKey] = albumLevel
+                        cache[albKey] = albumLevel
+                        cache[albOnlyKey] = albumLevel
+
+                        let cleanAlb = NowLocalService.cleanMetadata(targetAlb).lowercased()
+                        if !cleanAlb.isEmpty && cleanAlb != targetAlb {
+                            cache["\(cleanAlb)_\(enArt)_"] = albumLevel
+                            cache["\(cleanAlb)__"] = albumLevel
                         }
-                        if cache[albOnlyKey] == nil || (cache[albOnlyKey]?.animatedTallUrl == nil && cache[albOnlyKey]?.animatedSquareUrl == nil) {
-                            cache[albOnlyKey] = albumLevel
+                        let rawKeyAlb = keyLower.split(separator: "_", omittingEmptySubsequences: false).first.map(String.init) ?? ""
+                        if !rawKeyAlb.isEmpty && rawKeyAlb != targetAlb {
+                            cache["\(rawKeyAlb)_\(enArt)_"] = albumLevel
+                            cache["\(rawKeyAlb)__"] = albumLevel
                         }
                     }
                 }
@@ -677,6 +714,10 @@ actor NowLocalService {
         }
         if let fastCached = cachedEnrichment(album: album, artist: artist, title: title) {
             if (title == nil || title?.isEmpty == true) || fastCached.title != nil {
+                cache[cacheKey] = fastCached
+                return fastCached
+            }
+            if fastCached.animatedTallUrl != nil || fastCached.animatedSquareUrl != nil {
                 cache[cacheKey] = fastCached
                 return fastCached
             }

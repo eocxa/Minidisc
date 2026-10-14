@@ -302,21 +302,25 @@ struct FullPlayerView: View {
                     }
 
                     if (enrichment?.animatedTallUrl == nil && enrichment?.animatedSquareUrl == nil), let album = track.albumName, !album.isEmpty {
-                        var albumEnrichment = await NowLocalService.shared.fetchEnrichment(
-                            album: album,
-                            artist: track.artist,
-                            title: nil,
-                            activeServerBaseURL: container?.serverState.activeServer?.baseURL
-                        )
-                        if let ae = albumEnrichment,
-                           let aeAlb = ae.album,
-                           !aeAlb.isEmpty && !NowLocalService.albumsMatch(aeAlb, album) {
-                            albumEnrichment = nil
-                        }
-                        if albumEnrichment == nil {
-                            albumEnrichment = await NowLocalService.shared.fetchEnrichment(
+                        if let c = cached, c.animatedTallUrl != nil || c.animatedSquareUrl != nil {
+                            enrichment = NowLocalEnrichment(
+                                found: true,
+                                trackId: enrichment?.trackId ?? c.trackId,
+                                title: enrichment?.title,
+                                artist: enrichment?.artist ?? c.artist ?? track.artist,
+                                album: enrichment?.album ?? c.album ?? album,
+                                hasAnimatedArtwork: true,
+                                animatedSquareUrl: c.animatedSquareUrl,
+                                animatedTallUrl: c.animatedTallUrl,
+                                isAtmos: enrichment?.isAtmos ?? c.isAtmos,
+                                isLossless: enrichment?.isLossless ?? c.isLossless,
+                                lyricsUrl: enrichment?.lyricsUrl ?? c.lyricsUrl,
+                                lyricsType: enrichment?.lyricsType ?? c.lyricsType
+                            )
+                        } else {
+                            var albumEnrichment = await NowLocalService.shared.fetchEnrichment(
                                 album: album,
-                                artist: nil,
+                                artist: track.artist,
                                 title: nil,
                                 activeServerBaseURL: container?.serverState.activeServer?.baseURL
                             )
@@ -325,22 +329,35 @@ struct FullPlayerView: View {
                                !aeAlb.isEmpty && !NowLocalService.albumsMatch(aeAlb, album) {
                                 albumEnrichment = nil
                             }
-                        }
-                        if let albumEnrichment {
-                            enrichment = NowLocalEnrichment(
-                                found: true,
-                                trackId: enrichment?.trackId ?? albumEnrichment.trackId,
-                                title: enrichment?.title,
-                                artist: enrichment?.artist ?? track.artist,
-                                album: enrichment?.album ?? album,
-                                hasAnimatedArtwork: true,
-                                animatedSquareUrl: enrichment?.animatedSquareUrl ?? albumEnrichment.animatedSquareUrl,
-                                animatedTallUrl: albumEnrichment.animatedTallUrl ?? enrichment?.animatedTallUrl,
-                                isAtmos: enrichment?.isAtmos ?? albumEnrichment.isAtmos,
-                                isLossless: enrichment?.isLossless ?? albumEnrichment.isLossless,
-                                lyricsUrl: enrichment?.lyricsUrl ?? albumEnrichment.lyricsUrl,
-                                lyricsType: enrichment?.lyricsType ?? albumEnrichment.lyricsType
-                            )
+                            if albumEnrichment == nil {
+                                albumEnrichment = await NowLocalService.shared.fetchEnrichment(
+                                    album: album,
+                                    artist: nil,
+                                    title: nil,
+                                    activeServerBaseURL: container?.serverState.activeServer?.baseURL
+                                )
+                                if let ae = albumEnrichment,
+                                   let aeAlb = ae.album,
+                                   !aeAlb.isEmpty && !NowLocalService.albumsMatch(aeAlb, album) {
+                                    albumEnrichment = nil
+                                }
+                            }
+                            if let albumEnrichment {
+                                enrichment = NowLocalEnrichment(
+                                    found: true,
+                                    trackId: enrichment?.trackId ?? albumEnrichment.trackId,
+                                    title: enrichment?.title,
+                                    artist: enrichment?.artist ?? track.artist,
+                                    album: enrichment?.album ?? album,
+                                    hasAnimatedArtwork: true,
+                                    animatedSquareUrl: enrichment?.animatedSquareUrl ?? albumEnrichment.animatedSquareUrl,
+                                    animatedTallUrl: albumEnrichment.animatedTallUrl ?? enrichment?.animatedTallUrl,
+                                    isAtmos: enrichment?.isAtmos ?? albumEnrichment.isAtmos,
+                                    isLossless: enrichment?.isLossless ?? albumEnrichment.isLossless,
+                                    lyricsUrl: enrichment?.lyricsUrl ?? albumEnrichment.lyricsUrl,
+                                    lyricsType: enrichment?.lyricsType ?? albumEnrichment.lyricsType
+                                )
+                            }
                         }
                     }
 
@@ -421,6 +438,8 @@ struct FullPlayerView: View {
                         } else {
                             currentTrackEnrichment = enrichment
                         }
+                    } else if let c = cached, c.animatedTallUrl != nil || c.animatedSquareUrl != nil {
+                        currentTrackEnrichment = c
                     } else if !sameAlbum {
                         currentTrackEnrichment = nil
                     }
@@ -1208,40 +1227,12 @@ private struct TrackInfoSection: View {
 
     private func goToArtist() {
         guard let track = playerState.currentTrack else { return }
-        if track.artistId != nil {
-            postNavigateToArtist(track: track)
-            return
-        }
-        guard let name = track.artist else { return }
-        Task {
-            guard let c = container,
-                  let result = try? await c.libraryService.search(name),
-                  let found = result.artist?.first else { return }
-            postNavigateToArtist(artistId: found.id, artistName: found.name, coverArtId: found.coverArt)
-        }
+        navigateToArtist(track: track, container: container)
     }
 
     private func goToAlbum() {
         guard let track = playerState.currentTrack else { return }
-        if track.albumId != nil {
-            postNavigateToAlbum(track: track)
-            return
-        }
-        guard let name = track.albumName, !name.isEmpty else { return }
-        Task {
-            guard let c = container,
-                  let result = try? await c.libraryService.search(name),
-                  let found = result.album?.first else { return }
-            NotificationCenter.default.post(
-                name: .minidiscNavigateToAlbum,
-                object: nil,
-                userInfo: [
-                    "albumId":   found.id,
-                    "albumName": found.name,
-                    "coverArtId": found.coverArt as Any
-                ]
-            )
-        }
+        navigateToAlbum(track: track, container: container)
     }
 
     private func triggerSmartShuffle() async {

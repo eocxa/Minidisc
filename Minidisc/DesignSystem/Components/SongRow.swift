@@ -30,6 +30,9 @@ struct SongRow: View {
     var onRemoveFromPlaylist: (() -> Void)? = nil
     var onAddToPlaylist: ((DisplayableSong) -> Void)? = nil
     var onGoToAlbum: (() -> Void)? = nil
+    var onGoToArtist: (() -> Void)? = nil
+    var showsGoToAlbum: Bool = true
+    var showsGoToArtist: Bool = true
     var onTap: (() -> Void)? = nil
 
     @Environment(\.appContainer) private var container
@@ -42,7 +45,7 @@ struct SongRow: View {
     @State private var preparedShare: PreparedTrackShare?
     @State private var trackInformation: DisplayableSong?
 
-    init(song: DisplayableSong, index: Int, showCoverArt: Bool = false, showArtist: Bool = true, secondaryText: String? = nil, coverArtSize: CGFloat = 44, coverArtCornerRadius: CGFloat = MinidiscCornerRadius.standard, verticalPadding: CGFloat? = nil, primaryContentSpacing: CGFloat = MinidiscSpacing.s, isFavorite: Bool = false, titleColor: Color = .primary, secondaryColor: Color = .secondary, trailingAccessory: SongRowTrailingAccessory = .duration, menuAccessibilityIdentifier: String = "", onDownload: (() -> Void)? = nil, onRemoveDownload: (() -> Void)? = nil, isDownloading: Bool = false, onRemoveFromPlaylist: (() -> Void)? = nil, onAddToPlaylist: ((DisplayableSong) -> Void)? = nil, onGoToAlbum: (() -> Void)? = nil, onTap: (() -> Void)? = nil) {
+    init(song: DisplayableSong, index: Int, showCoverArt: Bool = false, showArtist: Bool = true, secondaryText: String? = nil, coverArtSize: CGFloat = 44, coverArtCornerRadius: CGFloat = MinidiscCornerRadius.standard, verticalPadding: CGFloat? = nil, primaryContentSpacing: CGFloat = MinidiscSpacing.s, isFavorite: Bool = false, titleColor: Color = .primary, secondaryColor: Color = .secondary, trailingAccessory: SongRowTrailingAccessory = .duration, menuAccessibilityIdentifier: String = "", onDownload: (() -> Void)? = nil, onRemoveDownload: (() -> Void)? = nil, isDownloading: Bool = false, onRemoveFromPlaylist: (() -> Void)? = nil, onAddToPlaylist: ((DisplayableSong) -> Void)? = nil, onGoToAlbum: (() -> Void)? = nil, onGoToArtist: (() -> Void)? = nil, showsGoToAlbum: Bool = true, showsGoToArtist: Bool = true, onTap: (() -> Void)? = nil) {
         self.song = song
         self.index = index
         self.showCoverArt = showCoverArt
@@ -63,6 +66,9 @@ struct SongRow: View {
         self.onRemoveFromPlaylist = onRemoveFromPlaylist
         self.onAddToPlaylist = onAddToPlaylist
         self.onGoToAlbum = onGoToAlbum
+        self.onGoToArtist = onGoToArtist
+        self.showsGoToAlbum = showsGoToAlbum
+        self.showsGoToArtist = showsGoToArtist
         self.onTap = onTap
     }
 
@@ -83,6 +89,9 @@ struct SongRow: View {
             onAddToPlaylist: onAddToPlaylist,
             onShare: { shareRequest = song },
             onGoToAlbum: onGoToAlbum,
+            onGoToArtist: onGoToArtist,
+            showsGoToAlbum: showsGoToAlbum,
+            showsGoToArtist: showsGoToArtist,
             onGetInfo: trailingAccessory == .menu ? { trackInformation = song } : nil
         )
     }
@@ -259,6 +268,9 @@ private struct SongActions: View {
     let onAddToPlaylist: ((DisplayableSong) -> Void)?
     let onShare: () -> Void
     let onGoToAlbum: (() -> Void)?
+    let onGoToArtist: (() -> Void)?
+    let showsGoToAlbum: Bool
+    let showsGoToArtist: Bool
     let onGetInfo: (() -> Void)?
 
     @Environment(\.appContainer) private var container
@@ -323,17 +335,40 @@ private struct SongActions: View {
                 }
             }
 
-            if onGoToAlbum != nil || onGetInfo != nil {
+            if showsGoToAlbum || showsGoToArtist || onGetInfo != nil {
                 Section {
-                    if let onGoToAlbum,
-                       song.albumId != nil,
-                       let albumName = song.albumName,
-                       !albumName.isEmpty {
-                        Button(action: onGoToAlbum) {
+                    if showsGoToAlbum,
+                       (song.albumId != nil || (song.albumName != nil && !song.albumName!.isEmpty)) {
+                        Button {
+                            if let onGoToAlbum {
+                                onGoToAlbum()
+                            } else {
+                                navigateToAlbum(track: song, container: container)
+                            }
+                        } label: {
                             Label("Go to Album", systemImage: "music.note.square.stack")
-                            Text(albumName)
+                            if let albumName = song.albumName, !albumName.isEmpty {
+                                Text(albumName)
+                            }
                         }
-                        .disabled(!isOnline)
+                        .disabled(!isOnline && !song.isDownloaded && !song.isLocalFile)
+                    }
+
+                    if showsGoToArtist,
+                       (song.artistId != nil || (song.artist != nil && !song.artist!.isEmpty)) {
+                        Button {
+                            if let onGoToArtist {
+                                onGoToArtist()
+                            } else {
+                                navigateToArtist(track: song, container: container)
+                            }
+                        } label: {
+                            Label("Go to Artist", systemImage: "music.mic")
+                            if let artist = song.artist, !artist.isEmpty {
+                                Text(artist)
+                            }
+                        }
+                        .disabled(!isOnline && !song.isDownloaded && !song.isLocalFile)
                     }
 
                     if let onGetInfo {
