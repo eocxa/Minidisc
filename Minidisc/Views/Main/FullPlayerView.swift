@@ -1512,13 +1512,13 @@ private struct BottomToolbar: View {
                     }
                 } label: {
                     Image(systemName: "quote.bubble")
-                        .font(.system(size: 23, weight: .medium))
+                        .font(.system(size: 21, weight: .medium))
                         .foregroundStyle(
                             isLyricsShowing && surface == .player
                                 ? accentColor
                                 : (hasLyrics ? secondaryContentColor : secondaryContentColor.opacity(0.35))
                         )
-                        .frame(width: 48, height: 48)
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Lyrics")
@@ -1526,8 +1526,8 @@ private struct BottomToolbar: View {
             }
 
             AirPlayRouteButton(tintColor: secondaryContentColor)
-                .frame(width: 48, height: 48)
-                .scaleEffect(1.12)
+                .frame(width: 44, height: 44)
+                .scaleEffect(1.06)
 
             if !isLiveStream {
                 Button {
@@ -1538,7 +1538,7 @@ private struct BottomToolbar: View {
                     }
                 } label: {
                     Image(systemName: "list.bullet")
-                        .font(.system(size: 22, weight: .medium))
+                        .font(.system(size: 21, weight: .medium))
                         .foregroundStyle(surface == .queue ? accentColor : secondaryContentColor)
                         .overlay(alignment: .topTrailing) {
                             if let badge = playerState.queueModeBadge {
@@ -1553,7 +1553,7 @@ private struct BottomToolbar: View {
                             }
                         }
                         .animation(.smooth(duration: 0.2), value: playerState.queueModeBadge)
-                        .frame(width: 48, height: 48)
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Queue")

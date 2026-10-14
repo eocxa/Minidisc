@@ -34,17 +34,17 @@ struct SongQuickActions: ViewModifier {
                     .accessibilityLabel("Add to Queue")
                 }
             }
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 if let onRemove {
                     Button(role: .destructive, action: onRemove) {
                         Label("Remove from Queue", systemImage: "minus.circle")
                     }
                 } else if !song.isLocalFile {
                     Button {
+                        HapticFeedback.light.trigger()
                         if let onDownload {
                             onDownload()
                         } else if let serverId = container?.serverState.activeServer?.id {
-                            HapticFeedback.light.trigger()
                             Task {
                                 await container?.toastService.perform {
                                     try await container?.downloadService.download(song: song.asSong(), serverId: serverId)
