@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import SwiftSonic
 import OSLog
 import UniformTypeIdentifiers
 
@@ -16,6 +17,7 @@ private struct QueueRow: View {
     @Environment(PlaylistAddition.self) private var playlistAddition
     @Environment(\.minidiscPlayingAccent) private var playingAccent
     @Query private var favoriteMatches: [FavoriteRecord]
+    @Query private var downloadedMatches: [DownloadedTrack]
 
     init(song: DisplayableSong, isCurrent: Bool, onRemove: (() -> Void)? = nil,
          contentColor: Color = .primary, secondaryContentColor: Color = .secondary, loadArtwork: Bool = true,
@@ -29,11 +31,14 @@ private struct QueueRow: View {
         self.showsReorderHint = showsReorderHint
         let cid = "song:\(song.id)"
         _favoriteMatches = Query(filter: #Predicate<FavoriteRecord> { $0.id == cid })
+        let sid = song.id
+        _downloadedMatches = Query(filter: #Predicate<DownloadedTrack> { $0.songId == sid })
     }
 
     private var isOnline: Bool { container?.serverState.isOnline == true }
     private var isPlaying: Bool { container?.playerState.playbackState == .playing }
     private var isFavorite: Bool { !favoriteMatches.isEmpty }
+    private var isDownloaded: Bool { song.isDownloaded || !downloadedMatches.isEmpty }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -117,6 +122,27 @@ private struct QueueRow: View {
                 Label("Add to Playlist...", systemImage: "music.note.list")
             }
             .disabled(!isOnline || song.isLocalFile)
+
+            Divider()
+
+            if isDownloaded {
+                Button { } label: {
+                    Label("Downloaded", systemImage: "arrow.down.circle.fill")
+                }
+                .disabled(true)
+            } else {
+                Button {
+                    guard let serverId = container?.serverState.activeServer?.id else { return }
+                    Task {
+                        await container?.toastService.perform {
+                            try await container?.downloadService.download(song: song.asSong(), serverId: serverId)
+                        }
+                    }
+                } label: {
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
+                .disabled(!isOnline || song.isLocalFile)
+            }
 
             Divider()
 

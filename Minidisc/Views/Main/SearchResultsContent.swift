@@ -39,6 +39,11 @@ struct SearchResultsContent: View {
     let canSelectSongs: Bool
     let onSelectSongs: () -> Void
     @Query private var favorites: [FavoriteRecord]
+    @Query private var downloadedTracks: [DownloadedTrack]
+
+    private var downloadedSongIds: Set<String> {
+        Set(downloadedTracks.map(\.songId))
+    }
 
     private var songs: [DisplayableSong] {
         matches.compactMap { if case .song(let song) = $0 { song } else { nil } }
@@ -55,6 +60,7 @@ struct SearchResultsContent: View {
         if let best {
             Section {
                 SearchMatchRow(match: best, songs: songs, isFavorite: favoriteIds.contains(best.id),
+                               isDownloaded: downloadedSongIds.contains(best.id),
                                onAddToPlaylist: onAddToPlaylist)
                     .accessibilityIdentifier("search.topResult.\(best.id)")
             } header: {
@@ -68,6 +74,7 @@ struct SearchResultsContent: View {
                 Section {
                     ForEach(scope == .all ? Array(values.prefix(5)) : values) { match in
                         SearchMatchRow(match: match, songs: songs, isFavorite: favoriteIds.contains(match.id),
+                                       isDownloaded: downloadedSongIds.contains(match.id),
                                        onAddToPlaylist: onAddToPlaylist)
                             .accessibilityIdentifier("search.result.\(match.id)")
                     }
@@ -122,13 +129,15 @@ private struct SearchMatchRow: View {
     let match: LibrarySearchMatch
     let songs: [DisplayableSong]
     let isFavorite: Bool
+    var isDownloaded: Bool = false
     let onAddToPlaylist: (DisplayableSong) -> Void
     @Environment(\.appContainer) private var container
 
     var body: some View {
         switch match {
         case .song(let song):
-            SongRow(song: song, index: 1, showCoverArt: true, isFavorite: isFavorite,
+            let liveSong = song.withDownloaded(isDownloaded || song.isDownloaded)
+            SongRow(song: liveSong, index: 1, showCoverArt: true, isFavorite: isFavorite,
                     trailingAccessory: .menu, onAddToPlaylist: onAddToPlaylist, onTap: {
                 Task {
                     if let serverId = container?.serverState.activeServer?.id.uuidString {

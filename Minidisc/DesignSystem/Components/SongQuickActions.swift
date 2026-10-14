@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftSonic
 
 /// The same two queue actions are available on every song row. Lists support them on iOS 26;
 /// scroll-based detail pages opt into the native swipe coordinator on iOS 27.
@@ -6,6 +7,7 @@ struct SongQuickActions: ViewModifier {
     let song: DisplayableSong
     var onAddToPlaylist: ((DisplayableSong) -> Void)?
     var onRemove: (() -> Void)? = nil
+    var onDownload: (() -> Void)? = nil
     @Environment(\.appContainer) private var container
     @Environment(PlaylistAddition.self) private var playlistAddition: PlaylistAddition?
 
@@ -39,13 +41,32 @@ struct SongQuickActions: ViewModifier {
                     }
                 } else if !song.isLocalFile {
                     Button {
+                        if let onDownload {
+                            onDownload()
+                        } else if let serverId = container?.serverState.activeServer?.id {
+                            HapticFeedback.light.trigger()
+                            Task {
+                                await container?.toastService.perform {
+                                    try await container?.downloadService.download(song: song.asSong(), serverId: serverId)
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "arrow.down")
+                    }
+                    .tint(.blue)
+                    .disabled(song.isDownloaded || container?.serverState.isOnline != true)
+                    .accessibilityLabel(song.isDownloaded ? "Downloaded" : "Download")
+
+                    Button {
                         if let onAddToPlaylist { onAddToPlaylist(song) }
                         else { playlistAddition?.present(song) }
                     } label: {
-                        Label("Add to Playlist...", systemImage: "music.note.list")
+                        Image(systemName: "music.note.list")
                     }
                     .tint(Color.minidiscAccent)
                     .disabled(container?.serverState.isOnline != true || (onAddToPlaylist == nil && playlistAddition == nil))
+                    .accessibilityLabel("Add to Playlist")
                 }
             }
     }

@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftSonic
 
 nonisolated enum SongRowTrailingAccessory: Sendable, Equatable {
     case duration
@@ -128,7 +129,7 @@ struct SongRow: View {
         } preview: {
             SongContextPreview(coverImage: coverImage, song: song)
         }
-        .modifier(SongQuickActions(song: song, onAddToPlaylist: onAddToPlaylist))
+        .modifier(SongQuickActions(song: song, onAddToPlaylist: onAddToPlaylist, onDownload: onDownload))
     }
 
     private var primaryContent: some View {
@@ -278,6 +279,18 @@ private struct SongActions: View {
 
     private var isOnline: Bool { container?.serverState.isOnline == true }
 
+    private func performDownload() {
+        if let onDownload {
+            onDownload()
+        } else if let serverId = container?.serverState.activeServer?.id {
+            Task {
+                await container?.toastService.perform {
+                    try await container?.downloadService.download(song: song.asSong(), serverId: serverId)
+                }
+            }
+        }
+    }
+
     var body: some View {
         Group {
             if !song.isLocalFile {
@@ -290,9 +303,9 @@ private struct SongActions: View {
                             .disabled(true)
                     } else {
                         Button("Download", systemImage: "arrow.down.circle.fill") {
-                            onDownload?()
+                            performDownload()
                         }
-                        .disabled(onDownload == nil)
+                        .disabled(!isOnline)
                     }
 
                     Button("Share", systemImage: "square.and.arrow.up.fill", action: onShare)

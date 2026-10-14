@@ -342,17 +342,23 @@ struct SearchView: View {
 
         @Environment(\.appContainer) private var container
         @Query private var allFavorites: [FavoriteRecord]
+        @Query private var downloadedTracks: [DownloadedTrack]
 
         private var favoriteSongIds: Set<String> {
             Set(allFavorites.map(\.id))
+        }
+
+        private var downloadedSongIds: Set<String> {
+            Set(downloadedTracks.map(\.songId))
         }
 
         var body: some View {
             if !songs.isEmpty {
                 Section("Songs") {
                     ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
+                        let liveSong = song.withDownloaded(song.isDownloaded || downloadedSongIds.contains(song.id))
                         SongRow(
-                            song: song,
+                            song: liveSong,
                             index: index + 1,
                             showCoverArt: true,
                             isFavorite: favoriteSongIds.contains("song:\(song.id)"),

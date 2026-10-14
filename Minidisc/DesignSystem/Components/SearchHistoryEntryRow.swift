@@ -204,6 +204,25 @@ struct SearchHistoryEntryRow: View, Equatable {
             }
         }
 
+        if isDownloaded {
+            Button { } label: {
+                Label("Downloaded", systemImage: "arrow.down.circle.fill")
+            }
+            .disabled(true)
+        } else {
+            Button {
+                guard let serverId = container?.serverState.activeServer?.id else { return }
+                Task {
+                    await container?.toastService.perform {
+                        try await container?.downloadService.download(song: song.asSong(), serverId: serverId)
+                    }
+                }
+            } label: {
+                Label("Download", systemImage: "arrow.down.circle")
+            }
+            .disabled(container?.serverState.isOnline != true)
+        }
+
         if song.albumId != nil || (song.albumName != nil && !song.albumName!.isEmpty) {
             Button {
                 navigateToAlbum(track: song, container: container)
