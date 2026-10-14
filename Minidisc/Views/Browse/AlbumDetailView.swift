@@ -46,7 +46,7 @@ struct AlbumDetailView: View {
         let initialEnrichment = NowLocalService.shared.cachedEnrichment(album: album.name, artist: album.artist)
             ?? NowLocalService.shared.cachedEnrichment(album: album.name, artist: nil)
         if let initialEnrichment,
-           initialEnrichment.album == nil || initialEnrichment.album?.isEmpty == true || NowLocalService.albumsMatch(initialEnrichment.album, album.name) {
+           NowLocalService.isAlbumEnrichmentMatch(initialEnrichment.album, targetAlbum: album.name) {
             _enrichment = State(initialValue: initialEnrichment)
             let hasCachedVideo = initialEnrichment.animatedTallUrl != nil || initialEnrichment.animatedSquareUrl != nil
             _isMotionVideoReady = State(initialValue: hasCachedVideo)
@@ -74,7 +74,7 @@ struct AlbumDetailView: View {
         _dominantColor = State(initialValue: initialDominantColor)
         let initialEnrichment = NowLocalService.shared.cachedEnrichment(album: albumName, artist: nil)
         if let initialEnrichment,
-           initialEnrichment.album == nil || initialEnrichment.album?.isEmpty == true || NowLocalService.albumsMatch(initialEnrichment.album, albumName) {
+           NowLocalService.isAlbumEnrichmentMatch(initialEnrichment.album, targetAlbum: albumName) {
             _enrichment = State(initialValue: initialEnrichment)
             let hasCachedVideo = initialEnrichment.animatedTallUrl != nil || initialEnrichment.animatedSquareUrl != nil
             _isMotionVideoReady = State(initialValue: hasCachedVideo)
@@ -105,10 +105,7 @@ struct AlbumDetailView: View {
     private var effectiveEnrichment: NowLocalEnrichment? {
         let album = viewModel?.albumName ?? initialName
         if let enrichment {
-            if let enAlb = enrichment.album,
-               !enAlb.isEmpty && !album.isEmpty && !NowLocalService.albumsMatch(enAlb, album) {
-                // Ignore mismatched enrichment
-            } else {
+            if NowLocalService.isAlbumEnrichmentMatch(enrichment.album, targetAlbum: album) {
                 return enrichment
             }
         }
@@ -117,11 +114,10 @@ struct AlbumDetailView: View {
         let cached = NowLocalService.shared.cachedEnrichment(album: rawAlbum, artist: rawArtist)
             ?? NowLocalService.shared.cachedEnrichment(album: rawAlbum, artist: nil)
         if let cached,
-           let enAlb = cached.album,
-           !enAlb.isEmpty && !album.isEmpty && !NowLocalService.albumsMatch(enAlb, album) {
-            return nil
+           NowLocalService.isAlbumEnrichmentMatch(cached.album, targetAlbum: album) {
+            return cached
         }
-        return cached
+        return nil
     }
 
     private var isDataSaverEnabled: Bool {
@@ -482,8 +478,7 @@ struct AlbumDetailView: View {
 
         // If existing enrichment is for another album, clear it immediately
         if let existing = enrichment,
-           let enAlb = existing.album,
-           !enAlb.isEmpty && !album.isEmpty && !NowLocalService.albumsMatch(enAlb, album) {
+           !NowLocalService.isAlbumEnrichmentMatch(existing.album, targetAlbum: album) {
             enrichment = nil
             isMotionVideoReady = false
         }
@@ -491,8 +486,7 @@ struct AlbumDetailView: View {
         if enrichment == nil || (enrichment?.animatedTallUrl == nil && enrichment?.animatedSquareUrl == nil) {
             if let cached = NowLocalService.shared.cachedEnrichment(album: album, artist: artist)
                 ?? NowLocalService.shared.cachedEnrichment(album: album, artist: nil) {
-                let enAlb = cached.album ?? ""
-                if enAlb.isEmpty || album.isEmpty || NowLocalService.albumsMatch(enAlb, album) {
+                if NowLocalService.isAlbumEnrichmentMatch(cached.album, targetAlbum: album) {
                     enrichment = cached
                     let hasCachedVideo = cached.animatedTallUrl != nil || cached.animatedSquareUrl != nil
                     if hasCachedVideo {
@@ -518,8 +512,7 @@ struct AlbumDetailView: View {
             )
             // Verify fetched album matches!
             if let f = fetched,
-               let fAlb = f.album,
-               !fAlb.isEmpty && !album.isEmpty && !NowLocalService.albumsMatch(fAlb, album) {
+               !NowLocalService.isAlbumEnrichmentMatch(f.album, targetAlbum: album) {
                 fetched = nil
             }
 
@@ -530,15 +523,14 @@ struct AlbumDetailView: View {
                     activeServerBaseURL: container?.serverState.activeServer?.baseURL
                 )
                 if let fallback, fallback.animatedTallUrl != nil || fallback.animatedSquareUrl != nil {
-                    let fbAlb = fallback.album ?? ""
-                    if fbAlb.isEmpty || album.isEmpty || NowLocalService.albumsMatch(fbAlb, album) {
+                    if NowLocalService.isAlbumEnrichmentMatch(fallback.album, targetAlbum: album) {
                         fetched = NowLocalEnrichment(
                             found: true,
                             trackId: fetched?.trackId ?? fallback.trackId,
                             title: fetched?.title ?? fallback.title,
                             artist: fetched?.artist ?? fallback.artist ?? artist,
                             album: fetched?.album ?? fallback.album ?? album,
-                            hasAnimatedArtwork: true,
+                            hasAnimatedArtwork: (fallback.animatedSquareUrl != nil || fallback.animatedTallUrl != nil),
                             animatedSquareUrl: fallback.animatedSquareUrl ?? fetched?.animatedSquareUrl,
                             animatedTallUrl: fallback.animatedTallUrl ?? fetched?.animatedTallUrl,
                             isAtmos: fetched?.isAtmos ?? fallback.isAtmos,
@@ -558,10 +550,13 @@ struct AlbumDetailView: View {
                     "\(album)_\(artist ?? "")_",
                     "\(album)__"
                 ]
-                let cleanAlb = NowLocalService.cleanMetadata(album)
-                if cleanAlb != album && !cleanAlb.isEmpty {
-                    keys.append("\(cleanAlb)_\(artist ?? "")_")
-                    keys.append("\(cleanAlb)__")
+                let isEdition = NowLocalService.isSpecialEdition(album)
+                if !isEdition {
+                    let cleanAlb = NowLocalService.cleanMetadata(album)
+                    if cleanAlb != album && !cleanAlb.isEmpty {
+                        keys.append("\(cleanAlb)_\(artist ?? "")_")
+                        keys.append("\(cleanAlb)__")
+                    }
                 }
                 NowLocalService.shared.storeCachedEnrichment(
                     effective,

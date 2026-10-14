@@ -29,6 +29,23 @@ nonisolated struct NowLocalEnrichment: Sendable, Codable {
         case lyricsUrl = "lyrics_url"
         case lyricsType = "lyrics_type"
     }
+
+    func strippingMotionArtwork() -> NowLocalEnrichment {
+        NowLocalEnrichment(
+            found: found,
+            trackId: trackId,
+            title: title,
+            artist: artist,
+            album: album,
+            hasAnimatedArtwork: false,
+            animatedSquareUrl: nil,
+            animatedTallUrl: nil,
+            isAtmos: isAtmos,
+            isLossless: isLossless,
+            lyricsUrl: lyricsUrl,
+            lyricsType: lyricsType
+        )
+    }
 }
 
 nonisolated struct NowLocalLyricWord: Sendable, Codable, Identifiable, Hashable {
@@ -131,9 +148,15 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
         var sanitized: [String: NowLocalEnrichment] = [:]
         for (k, v) in decoded {
             let keyParts = k.lowercased().split(separator: "_", omittingEmptySubsequences: false)
-            if let valAlb = v.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !valAlb.isEmpty {
-                if let keyAlb = keyParts.first, !keyAlb.isEmpty {
-                    if keyAlb != valAlb && !NowLocalService.albumsMatch(String(keyAlb), valAlb) {
+            if let keyAlb = keyParts.first, !keyAlb.isEmpty {
+                if let valAlb = v.album?.trimmingCharacters(in: .whitespacesAndNewlines), !valAlb.isEmpty {
+                    if keyAlb != valAlb.lowercased() && !NowLocalService.albumsMatch(String(keyAlb), valAlb) {
+                        continue
+                    }
+                }
+                // If a special edition entry was cached with standard album animated artwork, discard it!
+                if NowLocalService.isSpecialEdition(String(keyAlb)) {
+                    if let valAlb = v.album, !NowLocalService.isSpecialEdition(valAlb) {
                         continue
                     }
                 }
@@ -209,22 +232,24 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
         func findAlbumEnrichment() -> NowLocalEnrichment? {
             guard !alb.isEmpty else { return nil }
 
+            let isSpecial = NowLocalService.isSpecialEdition(alb)
+
             // 1. Direct key match with motion artwork
             if let exact = cache[albumKey] ?? cache[albumOnlyKey] {
-                if exact.album == nil || exact.album?.isEmpty == true || NowLocalService.albumsMatch(exact.album, alb) {
+                if NowLocalService.isAlbumEnrichmentMatch(exact.album, targetAlbum: alb) {
                     if exact.animatedTallUrl != nil || exact.animatedSquareUrl != nil {
                         return exact
                     }
                 }
             }
 
-            // 2. Clean metadata key match with motion artwork
+            // 2. Clean metadata key match with motion artwork (ONLY for non-special editions)
             let cleanAlb = NowLocalService.cleanMetadata(alb)
-            if cleanAlb != alb && !cleanAlb.isEmpty {
+            if !isSpecial && cleanAlb != alb && !cleanAlb.isEmpty {
                 let cleanKey = "\(cleanAlb)_\(art)_"
                 let cleanOnlyKey = "\(cleanAlb)__"
                 if let cleanExact = cache[cleanKey] ?? cache[cleanOnlyKey] {
-                    if cleanExact.album == nil || cleanExact.album?.isEmpty == true || NowLocalService.albumsMatch(cleanExact.album, alb) {
+                    if NowLocalService.isAlbumEnrichmentMatch(cleanExact.album, targetAlbum: alb) {
                         if cleanExact.animatedTallUrl != nil || cleanExact.animatedSquareUrl != nil {
                             return cleanExact
                         }
@@ -234,7 +259,11 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
 
             let targetNorm = NowLocalService.normalizeAlbumString(alb)
             guard !targetNorm.isEmpty else {
-                return cache[albumKey] ?? cache[albumOnlyKey]
+                if let candidate = cache[albumKey] ?? cache[albumOnlyKey],
+                   NowLocalService.isAlbumEnrichmentMatch(candidate.album, targetAlbum: alb) {
+                    return candidate
+                }
+                return nil
             }
 
             // 3. Scan cache for any entry for this album that has motion artwork (prefer motion artwork!)
@@ -242,21 +271,21 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
                 guard v.animatedTallUrl != nil || v.animatedSquareUrl != nil else { return false }
                 let parts = k.split(separator: "_", omittingEmptySubsequences: false)
                 guard let kAlb = parts.first, !kAlb.isEmpty else { return false }
-                let normK = NowLocalService.normalizeAlbumString(String(kAlb))
-                return normK == targetNorm || normK.contains(targetNorm) || targetNorm.contains(normK)
+                return NowLocalService.albumsMatch(String(kAlb), alb) &&
+                       NowLocalService.isAlbumEnrichmentMatch(v.album, targetAlbum: alb)
             })?.value {
                 return stripLyrics(motionMatch)
             }
 
             // 4. Fallback to exact match even without motion artwork
             if let exact = cache[albumKey] ?? cache[albumOnlyKey] {
-                if exact.album == nil || exact.album?.isEmpty == true || NowLocalService.albumsMatch(exact.album, alb) {
+                if NowLocalService.isAlbumEnrichmentMatch(exact.album, targetAlbum: alb) {
                     return exact
                 }
             }
-            if cleanAlb != alb && !cleanAlb.isEmpty {
+            if !isSpecial && cleanAlb != alb && !cleanAlb.isEmpty {
                 if let cleanExact = cache["\(cleanAlb)_\(art)_"] ?? cache["\(cleanAlb)__"] {
-                    if cleanExact.album == nil || cleanExact.album?.isEmpty == true || NowLocalService.albumsMatch(cleanExact.album, alb) {
+                    if NowLocalService.isAlbumEnrichmentMatch(cleanExact.album, targetAlbum: alb) {
                         return cleanExact
                     }
                 }
@@ -266,8 +295,8 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
             if let prefixMatch = cache.first(where: { (k, v) in
                 let parts = k.split(separator: "_", omittingEmptySubsequences: false)
                 guard let kAlb = parts.first, !kAlb.isEmpty else { return false }
-                let normK = NowLocalService.normalizeAlbumString(String(kAlb))
-                return (normK == targetNorm || normK.contains(targetNorm) || targetNorm.contains(normK)) &&
+                return NowLocalService.albumsMatch(String(kAlb), alb) &&
+                       NowLocalService.isAlbumEnrichmentMatch(v.album, targetAlbum: alb) &&
                        ((k.hasSuffix("_") || k == "\(kAlb)__"))
             })?.value {
                 return prefixMatch
@@ -278,7 +307,7 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
         if !tit.isEmpty {
             if let exact = cache[trackKey] {
                 // Ensure track matches album if provided
-                if !alb.isEmpty, let exactAlb = exact.album, !exactAlb.isEmpty && !NowLocalService.albumsMatch(exactAlb, alb) {
+                if !alb.isEmpty, !NowLocalService.isAlbumEnrichmentMatch(exact.album, targetAlbum: alb) {
                     return nil
                 }
                 // If track is cached without motion artwork, inherit from album if available
@@ -377,13 +406,14 @@ private nonisolated final class EnrichmentCacheStorage: @unchecked Sendable {
                         cache[albKey] = albumLevel
                         cache[albOnlyKey] = albumLevel
 
+                        let isTargetEdition = NowLocalService.isSpecialEdition(targetAlb)
                         let cleanAlb = NowLocalService.cleanMetadata(targetAlb).lowercased()
-                        if !cleanAlb.isEmpty && cleanAlb != targetAlb {
+                        if !isTargetEdition && !cleanAlb.isEmpty && cleanAlb != targetAlb {
                             cache["\(cleanAlb)_\(enArt)_"] = albumLevel
                             cache["\(cleanAlb)__"] = albumLevel
                         }
                         let rawKeyAlb = keyLower.split(separator: "_", omittingEmptySubsequences: false).first.map(String.init) ?? ""
-                        if !rawKeyAlb.isEmpty && rawKeyAlb != targetAlb {
+                        if !isTargetEdition && !rawKeyAlb.isEmpty && rawKeyAlb != targetAlb {
                             cache["\(rawKeyAlb)_\(enArt)_"] = albumLevel
                             cache["\(rawKeyAlb)__"] = albumLevel
                         }
@@ -526,6 +556,46 @@ actor NowLocalService {
         try? NSRegularExpression(pattern: "[^a-z0-9\\s]", options: [])
     }()
 
+    private static let editionRegex: NSRegularExpression? = {
+        let pattern = "(?i)(\\(.*?(deluxe|special|expanded|anniversary|collector|bonus|remaster|re-master|reissue|edition|version).*?\\)|\\[.*?(deluxe|special|expanded|anniversary|collector|bonus|remaster|re-master|reissue|edition|version).*?\\]|\\s*-\\s*(deluxe|special|expanded|anniversary|remaster|bonus).*?$)"
+        return try? NSRegularExpression(pattern: pattern, options: [])
+    }()
+
+    private static let editionKeywords: [String] = [
+        "super deluxe", "deluxe", "special", "expanded", "anniversary",
+        "collector", "bonus", "remaster", "re-master", "reissue",
+        "edition", "version", "tour", "complete", "platinum", "gold"
+    ]
+
+    nonisolated static func editionTags(_ s: String) -> Set<String> {
+        let lower = s.lowercased()
+        var found = Set<String>()
+        for kw in editionKeywords {
+            if lower.contains(kw) {
+                found.insert(kw)
+            }
+        }
+        return found
+    }
+
+    nonisolated static func isSpecialEdition(_ album: String?) -> Bool {
+        guard let album = album?.trimmingCharacters(in: .whitespacesAndNewlines), !album.isEmpty else { return false }
+        if let regex = editionRegex {
+            let range = NSRange(album.startIndex..., in: album)
+            if regex.firstMatch(in: album, options: [], range: range) != nil {
+                return true
+            }
+        }
+        let cleaned = cleanMetadata(album)
+        if cleaned != album {
+            let lower = album.lowercased()
+            for kw in ["deluxe", "special", "expanded", "anniversary", "collector", "bonus", "remaster", "reissue", "edition", "version"] {
+                if lower.contains(kw) { return true }
+            }
+        }
+        return false
+    }
+
     nonisolated static func cleanMetadata(_ string: String) -> String {
         var result = string
         for regex in metadataCleaningRegexes {
@@ -549,12 +619,56 @@ actor NowLocalService {
             return false
         }
         if a.caseInsensitiveCompare(b) == .orderedSame { return true }
+
+        let aIsSpecial = isSpecialEdition(a)
+        let bIsSpecial = isSpecialEdition(b)
+
+        // A special/deluxe edition must NEVER match a normal/standard edition!
+        if aIsSpecial != bIsSpecial {
+            return false
+        }
+
+        // If both are special editions, verify they share the same edition type
+        if aIsSpecial && bIsSpecial {
+            let tagsA = editionTags(a)
+            let tagsB = editionTags(b)
+            let primaryKeywords: Set<String> = [
+                "super deluxe", "deluxe", "special", "expanded", "anniversary",
+                "collector", "bonus", "remaster", "re-master", "reissue"
+            ]
+            let primA = tagsA.intersection(primaryKeywords)
+            let primB = tagsB.intersection(primaryKeywords)
+            if !primA.isEmpty && !primB.isEmpty {
+                if primA.intersection(primB).isEmpty {
+                    return false
+                }
+            } else if !tagsA.isEmpty && !tagsB.isEmpty {
+                if tagsA.intersection(tagsB).isEmpty {
+                    return false
+                }
+            }
+        }
+
         let normA = normalizeAlbumString(a)
         let normB = normalizeAlbumString(b)
         if normA.isEmpty || normB.isEmpty { return false }
         if normA == normB { return true }
         if normA.contains(normB) || normB.contains(normA) { return true }
         return false
+    }
+
+    nonisolated static func isAlbumEnrichmentMatch(_ enrichmentAlbum: String?, targetAlbum: String?) -> Bool {
+        guard let targetAlbum = targetAlbum?.trimmingCharacters(in: .whitespacesAndNewlines), !targetAlbum.isEmpty else {
+            return false
+        }
+        let enAlb = enrichmentAlbum?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if isSpecialEdition(targetAlbum) {
+            return !enAlb.isEmpty && albumsMatch(enAlb, targetAlbum)
+        }
+        if !enAlb.isEmpty && isSpecialEdition(enAlb) {
+            return false
+        }
+        return enAlb.isEmpty || albumsMatch(enAlb, targetAlbum)
     }
 
     private func titlesMatch(_ titleA: String, _ titleB: String) -> Bool {
@@ -741,24 +855,34 @@ actor NowLocalService {
 
         if (cleanAlbum != album || cleanArtist != artist || cleanTitle != title) {
             let cleanKey = "\(cleanAlbum ?? "")_\(cleanArtist ?? "")_\(cleanTitle ?? "")"
+            let isAlbumEdition = Self.isSpecialEdition(album) && (cleanAlbum != album)
+
             if let cachedClean = cache[cleanKey] {
-                cache[cacheKey] = cachedClean
-                var keys = [cacheKey, cleanKey]
-                if let cleanAlbum, !cleanAlbum.isEmpty {
-                    keys.append("\(cleanAlbum)_\(cleanArtist ?? "")_")
-                }
-                storeCachedEnrichment(cachedClean, forKeys: keys)
-                return cachedClean
-            }
-            for base in candidates {
-                if let cleanResult = await performEnrichmentRequest(base: base, album: cleanAlbum, artist: cleanArtist, title: cleanTitle, cacheKey: cleanKey) {
-                    cache[cacheKey] = cleanResult
-                    var keys = [cacheKey, cleanKey]
+                let finalEnrichment = isAlbumEdition ? cachedClean.strippingMotionArtwork() : cachedClean
+                cache[cacheKey] = finalEnrichment
+                var keys = [cacheKey]
+                if !isAlbumEdition {
+                    keys.append(cleanKey)
                     if let cleanAlbum, !cleanAlbum.isEmpty {
                         keys.append("\(cleanAlbum)_\(cleanArtist ?? "")_")
                     }
-                    storeCachedEnrichment(cleanResult, forKeys: keys)
-                    return cleanResult
+                }
+                storeCachedEnrichment(finalEnrichment, forKeys: keys)
+                return finalEnrichment
+            }
+            for base in candidates {
+                if let cleanResult = await performEnrichmentRequest(base: base, album: cleanAlbum, artist: cleanArtist, title: cleanTitle, cacheKey: cleanKey) {
+                    let finalEnrichment = isAlbumEdition ? cleanResult.strippingMotionArtwork() : cleanResult
+                    cache[cacheKey] = finalEnrichment
+                    var keys = [cacheKey]
+                    if !isAlbumEdition {
+                        keys.append(cleanKey)
+                        if let cleanAlbum, !cleanAlbum.isEmpty {
+                            keys.append("\(cleanAlbum)_\(cleanArtist ?? "")_")
+                        }
+                    }
+                    storeCachedEnrichment(finalEnrichment, forKeys: keys)
+                    return finalEnrichment
                 }
             }
         }
@@ -766,6 +890,12 @@ actor NowLocalService {
         // Fallback: check /api/library on each candidate
         for base in candidates {
             if let libResult = await performLibraryLookup(base: base, album: album, artist: artist, title: title) {
+                if let album, Self.isSpecialEdition(album), !Self.isSpecialEdition(libResult.album) {
+                    let stripped = libResult.strippingMotionArtwork()
+                    cache[cacheKey] = stripped
+                    storeCachedEnrichment(stripped, forKeys: [cacheKey])
+                    return stripped
+                }
                 cache[cacheKey] = libResult
                 var keys = [cacheKey]
                 if let album, !album.isEmpty {
@@ -783,14 +913,14 @@ actor NowLocalService {
             let cleanAlb = album.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
             if let cached = cache[albumOnlyKey] {
                 let cAlb = cached.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-                if !cAlb.isEmpty && cAlb == cleanAlb {
+                if !cAlb.isEmpty && NowLocalService.albumsMatch(cAlb, cleanAlb) {
                     return cached
                 }
             }
             for base in candidates {
                 if let result = await performEnrichmentRequest(base: base, album: album, artist: nil, title: nil, cacheKey: albumOnlyKey) {
                     let rAlb = result.album?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-                    if !rAlb.isEmpty && rAlb == cleanAlb {
+                    if !rAlb.isEmpty && NowLocalService.albumsMatch(rAlb, cleanAlb) {
                         storeCachedEnrichment(result, forKeys: [albumOnlyKey, "\(album)_\(artist ?? "")_"])
                         return result
                     }

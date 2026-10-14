@@ -57,8 +57,13 @@ struct FullPlayerView: View {
 
     private var effectiveTrackEnrichment: NowLocalEnrichment? {
         let track = container?.playerState.currentTrack
+        let curAlb = track?.albumName
         if let currentTrackEnrichment {
-            if track?.albumName == nil || currentTrackEnrichment.album == nil || NowLocalService.albumsMatch(currentTrackEnrichment.album, track?.albumName) || (track?.albumId != nil && previousTrack?.albumId != nil && track?.albumId == previousTrack?.albumId) {
+            if NowLocalService.isAlbumEnrichmentMatch(currentTrackEnrichment.album, targetAlbum: curAlb) {
+                return currentTrackEnrichment
+            }
+            if !NowLocalService.isSpecialEdition(curAlb),
+               (track?.albumId != nil && previousTrack?.albumId != nil && track?.albumId == previousTrack?.albumId) {
                 return currentTrackEnrichment
             }
         }
@@ -71,13 +76,13 @@ struct FullPlayerView: View {
             artist: nil,
             title: nil
         )
-        if let cached,
-           let enAlb = cached.album,
-           let curAlb = track?.albumName,
-           !enAlb.isEmpty && !curAlb.isEmpty && !NowLocalService.albumsMatch(enAlb, curAlb) {
+        if let cached {
+            if NowLocalService.isAlbumEnrichmentMatch(cached.album, targetAlbum: curAlb) {
+                return cached
+            }
             return nil
         }
-        return cached
+        return nil
     }
 
     private var isDataSaverEnabled: Bool {
@@ -222,7 +227,12 @@ struct FullPlayerView: View {
                     }
 
                     let sameAlbum: Bool = {
+                        let isSpecial = NowLocalService.isSpecialEdition(track.albumName)
                         if let prev = previousTrack {
+                            let prevSpecial = NowLocalService.isSpecialEdition(prev.albumName)
+                            if isSpecial != prevSpecial {
+                                return false
+                            }
                             if let aid = track.albumId, let paid = prev.albumId, !aid.isEmpty && !paid.isEmpty && aid == paid {
                                 return true
                             }
@@ -230,8 +240,14 @@ struct FullPlayerView: View {
                                 return true
                             }
                         }
-                        if let cur = currentTrackEnrichment?.album, NowLocalService.albumsMatch(track.albumName, cur) {
-                            return true
+                        if let cur = currentTrackEnrichment?.album {
+                            let curSpecial = NowLocalService.isSpecialEdition(cur)
+                            if isSpecial != curSpecial {
+                                return false
+                            }
+                            if NowLocalService.albumsMatch(track.albumName, cur) {
+                                return true
+                            }
                         }
                         return false
                     }()
@@ -256,9 +272,7 @@ struct FullPlayerView: View {
 
                     // Ensure cached enrichment strictly belongs to this album
                     if let c = cached,
-                       let cAlb = c.album,
-                       let curAlb = track.albumName,
-                       !cAlb.isEmpty && !curAlb.isEmpty && !NowLocalService.albumsMatch(cAlb, curAlb) {
+                       !NowLocalService.isAlbumEnrichmentMatch(c.album, targetAlbum: track.albumName) {
                         cached = nil
                     }
 
@@ -295,9 +309,7 @@ struct FullPlayerView: View {
                     )
                     // Validate album matches!
                     if let e = enrichment,
-                       let eAlb = e.album,
-                       let curAlb = track.albumName,
-                       !eAlb.isEmpty && !curAlb.isEmpty && !NowLocalService.albumsMatch(eAlb, curAlb) {
+                       !NowLocalService.isAlbumEnrichmentMatch(e.album, targetAlbum: track.albumName) {
                         enrichment = nil
                     }
 
@@ -309,7 +321,7 @@ struct FullPlayerView: View {
                                 title: enrichment?.title,
                                 artist: enrichment?.artist ?? c.artist ?? track.artist,
                                 album: enrichment?.album ?? c.album ?? album,
-                                hasAnimatedArtwork: true,
+                                hasAnimatedArtwork: (c.animatedSquareUrl != nil || c.animatedTallUrl != nil),
                                 animatedSquareUrl: c.animatedSquareUrl,
                                 animatedTallUrl: c.animatedTallUrl,
                                 isAtmos: enrichment?.isAtmos ?? c.isAtmos,
@@ -325,8 +337,7 @@ struct FullPlayerView: View {
                                 activeServerBaseURL: container?.serverState.activeServer?.baseURL
                             )
                             if let ae = albumEnrichment,
-                               let aeAlb = ae.album,
-                               !aeAlb.isEmpty && !NowLocalService.albumsMatch(aeAlb, album) {
+                               !NowLocalService.isAlbumEnrichmentMatch(ae.album, targetAlbum: album) {
                                 albumEnrichment = nil
                             }
                             if albumEnrichment == nil {
@@ -337,8 +348,7 @@ struct FullPlayerView: View {
                                     activeServerBaseURL: container?.serverState.activeServer?.baseURL
                                 )
                                 if let ae = albumEnrichment,
-                                   let aeAlb = ae.album,
-                                   !aeAlb.isEmpty && !NowLocalService.albumsMatch(aeAlb, album) {
+                                   !NowLocalService.isAlbumEnrichmentMatch(ae.album, targetAlbum: album) {
                                     albumEnrichment = nil
                                 }
                             }
@@ -349,7 +359,7 @@ struct FullPlayerView: View {
                                     title: enrichment?.title,
                                     artist: enrichment?.artist ?? track.artist,
                                     album: enrichment?.album ?? album,
-                                    hasAnimatedArtwork: true,
+                                    hasAnimatedArtwork: (albumEnrichment.animatedSquareUrl != nil || albumEnrichment.animatedTallUrl != nil),
                                     animatedSquareUrl: enrichment?.animatedSquareUrl ?? albumEnrichment.animatedSquareUrl,
                                     animatedTallUrl: albumEnrichment.animatedTallUrl ?? enrichment?.animatedTallUrl,
                                     isAtmos: enrichment?.isAtmos ?? albumEnrichment.isAtmos,
@@ -362,7 +372,10 @@ struct FullPlayerView: View {
                     }
 
                     // Fallback for tracks played from outside (search, playlists, unknown album)
-                    if enrichment?.animatedTallUrl == nil && enrichment?.animatedSquareUrl == nil {
+                    // If this track is from a special edition album, DO NOT discover video by title alone,
+                    // as that would match the standard album's motion artwork!
+                    let isSpecialTrack = NowLocalService.isSpecialEdition(track.albumName)
+                    if !isSpecialTrack && enrichment?.animatedTallUrl == nil && enrichment?.animatedSquareUrl == nil {
                         if !track.title.isEmpty {
                             let trackDiscover = await NowLocalService.shared.fetchEnrichment(
                                 album: nil,
@@ -377,7 +390,7 @@ struct FullPlayerView: View {
                                     title: enrichment?.title ?? td.title,
                                     artist: enrichment?.artist ?? td.artist,
                                     album: enrichment?.album ?? td.album,
-                                    hasAnimatedArtwork: true,
+                                    hasAnimatedArtwork: (td.animatedSquareUrl != nil || td.animatedTallUrl != nil),
                                     animatedSquareUrl: td.animatedSquareUrl,
                                     animatedTallUrl: td.animatedTallUrl,
                                     isAtmos: enrichment?.isAtmos ?? td.isAtmos,
@@ -419,10 +432,13 @@ struct FullPlayerView: View {
                         if let an = track.albumName, !an.isEmpty {
                             keysToStore.append("\(an)_\(track.artist ?? "")_")
                             keysToStore.append("\(an)__")
-                            let cleanAn = NowLocalService.cleanMetadata(an)
-                            if cleanAn != an && !cleanAn.isEmpty {
-                                keysToStore.append("\(cleanAn)_\(track.artist ?? "")_")
-                                keysToStore.append("\(cleanAn)__")
+                            let isEdition = NowLocalService.isSpecialEdition(an)
+                            if !isEdition {
+                                let cleanAn = NowLocalService.cleanMetadata(an)
+                                if cleanAn != an && !cleanAn.isEmpty {
+                                    keysToStore.append("\(cleanAn)_\(track.artist ?? "")_")
+                                    keysToStore.append("\(cleanAn)__")
+                                }
                             }
                         }
                         NowLocalService.shared.storeCachedEnrichment(
